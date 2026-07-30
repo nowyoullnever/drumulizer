@@ -1,10 +1,12 @@
 # Offline Requirements
 
-The built Drumulizer application must run without internet access and must not include networking features. v0.2.0 imports audio only from user-selected local WAV or MP3 files.
+The built Drumulizer application must run without internet access and must not include networking features. v0.4.0 imports audio only from user-selected local WAV or MP3 files and runs waveform, slice, and onset analysis locally.
 
 ## Production
 
-Production blocks outgoing HTTP and HTTPS requests from the Electron session. The app does not use remote APIs, cloud AI, telemetry, analytics, crash-reporting services, CDNs, online font loading, remote images, remote stylesheets, automatic updates, remote configuration, feature flags, online authentication, or remote license checks. There is no remote URL import field, browser component, network client, or remote media loader.
+Production blocks outgoing HTTP and HTTPS requests from the Electron session. The app does not use remote APIs, cloud AI, machine learning services, telemetry, analytics, crash-reporting services, CDNs, online font loading, remote images, remote stylesheets, automatic updates, remote configuration, feature flags, online authentication, or remote license checks. There is no remote URL import field, browser component, network client, or remote media loader.
+
+Onset detection is deterministic DSP running in a local renderer worker. It does not send audio, filenames, metadata, candidate information, or analysis metrics to any remote service.
 
 The UI does not need persistent offline-mode badges to satisfy this rule. Offline behavior is enforced by architecture and security policy, while user-facing status is limited to the current app state.
 

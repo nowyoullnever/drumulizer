@@ -1,6 +1,6 @@
 # Edit History
 
-Drumulizer v0.3.0 has a dedicated slice-edit history.
+Drumulizer v0.4.0 has a dedicated slice-edit history for committed marker edits.
 
 ## Included Actions
 
@@ -9,6 +9,8 @@ Drumulizer v0.3.0 has a dedicated slice-edit history.
 - Delete marker
 - Equal Divide
 - Reset Markers
+- Apply detected candidates with Replace
+- Apply detected candidates with Merge
 
 ## Excluded Actions
 
@@ -19,10 +21,14 @@ Drumulizer v0.3.0 has a dedicated slice-edit history.
 - Changing master volume
 - Changing language
 - Zooming or panning the waveform
+- Generating onset preview candidates before Apply
+- Selecting or auditioning an onset preview candidate
 
 ## Strategy
 
 The history stores lightweight snapshots of marker arrays plus selected marker and selected slice IDs. It does not store decoded audio or waveform peak data.
+
+Onset preview candidates remain outside history until Apply. Replace and Merge each create one history entry for the complete operation, not one entry per candidate.
 
 ## Drag Coalescing
 

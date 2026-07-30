@@ -29,3 +29,24 @@ export const computeAuditionRegion = (input: {
     prerollSeconds,
   };
 };
+
+export const computeCandidateAuditionRegion = (input: {
+  sampleIndex: number;
+  sampleRate: number;
+  sourceDurationSeconds?: number;
+  preMs?: number;
+  postMs?: number;
+}) => {
+  const sampleRate =
+    Number.isFinite(input.sampleRate) && input.sampleRate > 0 ? input.sampleRate : 1;
+  const centerSeconds = Math.max(0, input.sampleIndex) / sampleRate;
+  const sourceEndSeconds =
+    input.sourceDurationSeconds !== undefined && Number.isFinite(input.sourceDurationSeconds)
+      ? Math.max(0, input.sourceDurationSeconds)
+      : Number.POSITIVE_INFINITY;
+  return computeAuditionRegion({
+    startSeconds: Math.min(centerSeconds, sourceEndSeconds),
+    endSeconds: Math.min(centerSeconds + Math.max(0, input.postMs ?? 120) / 1000, sourceEndSeconds),
+    prerollMs: input.preMs ?? 20,
+  });
+};

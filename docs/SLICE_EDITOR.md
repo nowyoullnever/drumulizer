@@ -1,6 +1,6 @@
 # Slice Editor
 
-Drumulizer v0.3.0 adds manual slice editing without automatic audio analysis.
+Drumulizer v0.4.0 keeps manual slice editing as the committed editing model. Offline onset analysis can create non-destructive preview candidates, but markers change only when the user applies Replace or Merge.
 
 ## Marker Model
 
@@ -10,7 +10,7 @@ Editable markers are stored as integer sample indices:
 interface SliceMarker {
   id: string;
   sampleIndex: number;
-  origin: 'manual' | 'equal-division';
+  origin: 'manual' | 'equal-division' | 'detected';
 }
 ```
 
@@ -65,6 +65,8 @@ Zero-crossing assist is not applied to equal division; boundaries remain mathema
 
 Zero-crossing assist uses the analysis-only mono data prepared during import. It performs no FFT, STFT, HPSS, onset detection, or transient detection.
 
+Onset detection has its own worker and DSP path. It does not affect manual zero-crossing decisions.
+
 When enabled for manual add or final drag commit:
 
 1. Convert requested position to a sample index.
@@ -78,4 +80,4 @@ During drag, preview movement is unsnapped for smooth feedback; only pointer rel
 
 ## Source Replacement
 
-Successful source replacement clears markers, selects one full-file slice, resets edit history, stops audition, and resets the waveform viewport. Failed replacement preserves the previous source, markers, selection, and history where practical.
+Successful source replacement clears markers and onset preview, selects one full-file slice, resets edit history, stops playback/audition, and resets the waveform viewport. Failed replacement preserves the previous source, markers, selection, and history where practical.

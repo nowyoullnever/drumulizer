@@ -8,6 +8,7 @@ import type {
   SliceRegion,
 } from './types';
 import { snapToZeroCrossing } from './zeroCrossing';
+import type { OnsetApplyMode, OnsetApplySummary, OnsetCandidate } from '../audio/onset/onsetTypes';
 
 export const sourceStartBoundaryId = 'source-start';
 export const sourceEndBoundaryId = 'source-end';
@@ -321,5 +322,53 @@ export const resetMarkers = (sourceLengthSamples: number, sampleRate: number): S
     markers: [],
     selectedMarkerId: null,
     selectedSliceId: slices[0]?.id ?? '',
+  };
+};
+
+export const applyDetectedCandidates = (input: {
+  markers: SliceMarker[];
+  candidates: OnsetCandidate[];
+  mode: OnsetApplyMode;
+  sourceLengthSamples: number;
+  sampleRate: number;
+}): SliceEditResult & { summary: OnsetApplySummary } => {
+  const baseMarkers = input.mode === 'replace' ? [] : input.markers;
+  const nextMarkers: SliceMarker[] = [...baseMarkers];
+  let candidatesSkipped = 0;
+
+  for (const candidate of input.candidates) {
+    if (nextMarkers.length >= MAX_SLICE_MARKERS) {
+      candidatesSkipped += 1;
+      continue;
+    }
+    const error = validateMarkerSample(
+      nextMarkers,
+      candidate.sampleIndex,
+      input.sourceLengthSamples,
+      input.sampleRate,
+    );
+    if (error) {
+      candidatesSkipped += 1;
+      continue;
+    }
+    nextMarkers.push({
+      id: `detected-${candidate.id}`,
+      sampleIndex: candidate.sampleIndex,
+      origin: 'detected',
+    });
+  }
+
+  const markers = normalizeMarkers(nextMarkers, input.sourceLengthSamples);
+  const slices = deriveSlices(markers, input.sourceLengthSamples, input.sampleRate);
+  return {
+    markers,
+    selectedMarkerId: null,
+    selectedSliceId: slices[0]?.id ?? '',
+    summary: {
+      markersApplied: markers.length - baseMarkers.length,
+      candidatesSkipped,
+      capped:
+        input.candidates.length > MAX_SLICE_MARKERS || nextMarkers.length >= MAX_SLICE_MARKERS,
+    },
   };
 };

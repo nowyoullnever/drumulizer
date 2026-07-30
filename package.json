@@ -1,6 +1,6 @@
 {
   "name": "drumulizer",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Offline sample-based IDM drum-loop generator foundation.",
   "author": "nowyoullnever",
   "license": "UNLICENSED",
@@ -16,6 +16,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:onset": "vitest run onset fft preprocess detectionCandidate onsetWorker analysisUi",
+    "verify:onset": "npm run typecheck && npm run test:onset",
     "build": "npm run typecheck && electron-vite build",
     "dist:win": "npm run build && electron-builder --win --x64 --publish never --config electron-builder.yml"
   },

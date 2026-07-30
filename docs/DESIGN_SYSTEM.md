@@ -1,6 +1,6 @@
 # Design System
 
-Drumulizer combines 1970s avant-garde fashion graphics, saturated but faded print color, geometric textile references, modular hardware structure, and pixel-interface construction. v0.3.0 adds manual slice editing while preserving this identity.
+Drumulizer combines 1970s avant-garde fashion graphics, saturated but faded print color, geometric textile references, modular hardware structure, and pixel-interface construction. v0.4.0 adds onset-analysis candidate preview while preserving this identity.
 
 ## Palette
 
@@ -39,6 +39,12 @@ The slice editor uses the same modular hardware language as the rest of the work
 The Slice Set panel keeps edit controls compact: tool selection, Undo/Redo, Reset Markers, zero-crossing assist, equal division presets, and custom division live together. The Selected Slice panel focuses on the current region's timing, sample range, navigation, audition, pre-roll, and marker deletion.
 
 Slice Map blocks are proportional to sample duration and must remain scannable when there are many slices. Compact labels are allowed when dense maps would otherwise overflow.
+
+## Candidate Preview
+
+Onset preview candidates are drawn as non-destructive waveform overlays. They use vertical marker lines plus band-specific symbols so the selected candidate is not indicated by color alone. Dense candidate sets must remain usable without rendering a text label for every candidate. The selected preview candidate uses stronger contrast and line weight, while committed slice markers remain visually distinct.
+
+The analysis panel shows candidate count, candidate density, strongest band, selected candidate number, time, confidence, dominant band, and supporting feature count. These diagnostics are compact control-surface information, not marketing copy or instrument classification.
 
 ## Header Status
 

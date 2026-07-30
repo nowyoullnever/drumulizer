@@ -751,6 +751,72 @@ input:disabled {
   font-size: 14px;
 }
 
+.analysis-panel {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.analysis-panel__stats {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.analysis-panel__stats div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--border-primary);
+  padding-bottom: 4px;
+}
+
+.analysis-panel__stats dt,
+.analysis-panel__stats dd {
+  margin: 0;
+}
+
+.analysis-panel__mode,
+.analysis-panel__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.analysis-panel__mode strong {
+  grid-column: 1 / -1;
+}
+
+.analysis-panel__message {
+  margin: 0;
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+  padding: var(--space-2);
+}
+
+.candidate-details {
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+  padding: var(--space-2);
+}
+
+.candidate-details dl {
+  display: grid;
+  gap: 4px;
+  margin: var(--space-2) 0 0;
+}
+
+.candidate-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.candidate-details dt,
+.candidate-details dd,
+.candidate-details p {
+  margin: 0;
+}
+
 .drag-overlay {
   position: fixed;
   inset: var(--space-6);
