@@ -121,7 +121,12 @@ export class PlaybackEngine {
     preMs?: number;
     postMs?: number;
   }): Promise<PlaybackSnapshot> {
-    return this.auditionRegion(computeCandidateAuditionRegion(input));
+    return this.auditionRegion(
+      computeCandidateAuditionRegion({
+        ...input,
+        sourceDurationSeconds: this.buffer?.duration,
+      }),
+    );
   }
 
   private async auditionRegion(region: {

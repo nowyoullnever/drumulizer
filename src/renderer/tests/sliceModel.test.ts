@@ -271,5 +271,16 @@ describe('slice audition math', () => {
     expect(nearStart.offsetSeconds).toBe(0);
     expect(nearStart.durationSeconds).toBe(0.125);
     expect(nearStart.prerollSeconds).toBe(0.005);
+
+    const nearEnd = computeCandidateAuditionRegion({
+      sampleIndex: 990,
+      sampleRate: 1000,
+      sourceDurationSeconds: 1,
+      preMs: 20,
+      postMs: 120,
+    });
+    expect(nearEnd.offsetSeconds).toBeCloseTo(0.97);
+    expect(nearEnd.durationSeconds).toBeCloseTo(0.03);
+    expect(nearEnd.fadeSeconds).toBeLessThanOrEqual(nearEnd.durationSeconds * 0.25);
   });
 });

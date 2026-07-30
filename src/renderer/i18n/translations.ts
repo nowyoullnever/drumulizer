@@ -15,11 +15,11 @@ export const translations = {
     'app.about': '정보',
     'app.aboutTitle': 'Drumulizer 정보',
     'app.aboutIntro':
-      'Drumulizer v{version}은 로컬 WAV/MP3 불러오기, 파형 표시, 기본 재생, 수동 슬라이스 편집을 제공합니다.',
+      'Drumulizer v{version}은 로컬 WAV/MP3 불러오기, 파형 재생, 수동 슬라이스 편집, 오프라인 transient 분석, 비파괴 후보 미리보기와 후보 오디션을 제공합니다.',
     'app.aboutOffline':
       '네트워크 불러오기, 원격 API, 텔레메트리, CDN, 원격 에셋은 사용하지 않습니다.',
     'app.aboutShortcuts':
-      '단축키: Space 재생/일시정지, Home 처음으로, 화살표 좌우 이동, Shift+화살표 크게 이동, L 루프, M 도구 전환, A 슬라이스 듣기, [/] 슬라이스 이동.',
+      '단축키: Space 재생/일시정지, Home 처음으로, 화살표 좌우 이동, Shift+화살표 크게 이동, L 루프, M 도구 전환, A 슬라이스 듣기, [/] 슬라이스 이동, 쉼표/마침표 후보 이동.',
     'app.aboutTypeface':
       'Typeface: x10y12pxDenkiChipHangul, bundled locally under the SIL Open Font License.',
     'app.repository': 'Repository: nowyoullnever/drumulizer',
@@ -58,8 +58,8 @@ export const translations = {
     'metadata.sampleRate': '샘플레이트',
     'metadata.channels': '채널',
     'analysis.disabled':
-      '분석용 mono 데이터는 수동 보정과 transient 분석에만 사용합니다. HPSS와 slicing 자동화는 v0.4.0 Phase 1에서 실행하지 않습니다.',
-    'analysis.disabledLabel': '자동 분석 없음',
+      '분석용 mono 데이터는 수동 보정과 오프라인 transient 후보 미리보기에만 사용합니다. HPSS, BPM, 악기 분류, 자동 패턴 생성은 실행하지 않습니다.',
+    'analysis.disabledLabel': '자동 슬라이싱 없음',
     'analysis.sensitivity': '민감도',
     'analysis.minimumGap': '최소 간격',
     'analysis.analyze': '분석',
@@ -194,11 +194,11 @@ export const translations = {
     'app.about': 'About',
     'app.aboutTitle': 'About Drumulizer',
     'app.aboutIntro':
-      'Drumulizer v{version} provides local WAV/MP3 import, waveform display, basic playback, and manual slice editing.',
+      'Drumulizer v{version} provides local WAV/MP3 import, waveform playback, manual slice editing, offline transient analysis, non-destructive candidate preview, and candidate audition.',
     'app.aboutOffline':
       'Network import, remote APIs, telemetry, CDNs, and remote assets are not used.',
     'app.aboutShortcuts':
-      'Shortcuts: Space play/pause, Home to start, arrow keys seek, Shift+arrow seek farther, L loop, M tool toggle, A audition, [/] slice navigation.',
+      'Shortcuts: Space play/pause, Home to start, arrow keys seek, Shift+arrow seek farther, L loop, M tool toggle, A slice audition, [/] slice navigation, comma/period candidate navigation.',
     'app.aboutTypeface':
       'Typeface: x10y12pxDenkiChipHangul, bundled locally under the SIL Open Font License.',
     'app.repository': 'Repository: nowyoullnever/drumulizer',
@@ -238,8 +238,8 @@ export const translations = {
     'metadata.sampleRate': 'Sample rate',
     'metadata.channels': 'Channels',
     'analysis.disabled':
-      'Analysis mono data is used only for manual assist and transient analysis. HPSS and automatic slicing do not run in v0.4.0 Phase 1.',
-    'analysis.disabledLabel': 'No automatic analysis',
+      'Analysis mono data is used only for manual assist and offline transient candidate preview. HPSS, BPM, instrument classification, and automatic pattern generation do not run.',
+    'analysis.disabledLabel': 'No automatic slicing',
     'analysis.sensitivity': 'Sensitivity',
     'analysis.minimumGap': 'Minimum Gap',
     'analysis.analyze': 'Analyze',

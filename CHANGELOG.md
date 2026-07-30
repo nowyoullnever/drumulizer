@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.0] - 2026-07-30
+
+### Added
+
+- Offline transient and onset detection
+- Worker-based multiband spectral-flux analysis
+- Fast, slow, and low-frequency transient envelopes
+- Adaptive local normalization and peak selection
+- Non-destructive onset candidate preview
+- Candidate selection, navigation, and audition
+- Replace and Merge marker application
+- Candidate confidence and dominant-band diagnostics
+- Deterministic onset evaluation corpus
+- Korean and English onset-analysis interface
+
+### Changed
+
+- Improved analysis performance through blockwise robust normalization and reusable DSP buffers
+- Improved quiet transient and bass-heavy attack detection
+- Reduced false positives from gradual ramps, sustained tones, post-ring peaks, and dense material
+
 ## [0.3.0] - 2026-07-30
 
 ### Added
