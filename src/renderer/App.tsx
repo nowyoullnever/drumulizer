@@ -21,11 +21,38 @@ import { PixelDialog } from './components/PixelDialog';
 import { PixelPanel } from './components/PixelPanel';
 import { PixelSectionHeader } from './components/PixelSectionHeader';
 import { PixelTabs } from './components/PixelTabs';
+import { SelectedSlicePanel } from './components/SelectedSlicePanel';
+import { SliceMap } from './components/SliceMap';
+import { SliceSetPanel } from './components/SliceSetPanel';
 import { SourcePanel } from './components/SourcePanel';
 import { TransportControls } from './components/TransportControls';
 import { WaveformCanvas } from './components/WaveformCanvas';
 import { errorKeyForCode, type UserFacingErrorCode } from './i18n/errorMessages';
 import { useI18n } from './i18n/useI18n';
+import {
+  addMarker,
+  deleteMarker,
+  deriveBoundaries,
+  deriveSlices,
+  equalDivide,
+  findSliceBySample,
+  moveMarker,
+  resetMarkers,
+} from './slice/sliceModel';
+import {
+  createSliceHistory,
+  pushSliceHistory,
+  redoSliceHistory,
+  undoSliceHistory,
+  type SliceHistory,
+} from './slice/history';
+import type {
+  SliceEditErrorCode,
+  SliceHistoryState,
+  SliceMarker,
+  SliceRegion,
+  WaveformTool,
+} from './slice/types';
 
 const fallbackInfo: DrumulizerAppInfo = {
   name: 'Drumulizer',
@@ -34,6 +61,12 @@ const fallbackInfo: DrumulizerAppInfo = {
 };
 
 const playbackEngine = new PlaybackEngine();
+
+const initialSliceState: SliceHistoryState = {
+  markers: [],
+  selectedMarkerId: null,
+  selectedSliceId: '',
+};
 
 const makeDroppedAudioResult = async (file: File): Promise<LocalAudioFileResult> => ({
   canceled: false,
@@ -65,6 +98,16 @@ const selectFileInRendererPreview = (): Promise<LocalAudioFileResult> =>
 
 const initialPlayback = (): PlaybackSnapshot => playbackEngine.snapshot();
 
+const isTextInputTarget = (target: EventTarget | null): boolean => {
+  const element = target as HTMLElement | null;
+  return (
+    element?.tagName === 'INPUT' ||
+    element?.tagName === 'TEXTAREA' ||
+    element?.tagName === 'SELECT' ||
+    Boolean(element?.isContentEditable)
+  );
+};
+
 export function App() {
   const { t } = useI18n();
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -76,15 +119,38 @@ export function App() {
   const [playback, setPlayback] = useState<PlaybackSnapshot>(initialPlayback);
   const [dragActive, setDragActive] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [tool, setTool] = useState<WaveformTool>('select');
+  const [zeroCrossingEnabled, setZeroCrossingEnabled] = useState(true);
+  const [customDivision, setCustomDivision] = useState(8);
+  const [prerollMs, setPrerollMs] = useState(0);
+  const [inlineSliceError, setInlineSliceError] = useState<SliceEditErrorCode | null>(null);
+  const [inlineSliceMessage, setInlineSliceMessage] = useState<string | null>(null);
+  const [sliceHistory, setSliceHistory] = useState<SliceHistory>(() =>
+    createSliceHistory(initialSliceState),
+  );
   const [zoom, setZoom] = useState(1);
   const [viewportStart, setViewportStart] = useState(0);
   const importGeneration = useRef(0);
   const animationFrame = useRef<number | null>(null);
+  const dragStartState = useRef<SliceHistoryState | null>(null);
   const appInfo = useMemo(() => window.drumulizer?.getAppInfo() ?? fallbackInfo, []);
 
   const duration = metadata?.durationSeconds ?? 0;
+  const sampleRate = metadata?.sampleRate ?? 1;
+  const sourceLengthSamples = metadata ? Math.max(1, Math.round(duration * sampleRate)) : 0;
   const viewportDuration = duration > 0 ? duration / zoom : 1;
   const viewportEnd = Math.min(duration, viewportStart + viewportDuration);
+  const markers = sliceHistory.present.markers;
+  const boundaries = useMemo(
+    () => deriveBoundaries(markers, sourceLengthSamples),
+    [markers, sourceLengthSamples],
+  );
+  const slices = useMemo(
+    () => deriveSlices(markers, sourceLengthSamples, sampleRate),
+    [markers, sampleRate, sourceLengthSamples],
+  );
+  const selectedSlice =
+    slices.find((slice) => slice.id === sliceHistory.present.selectedSliceId) ?? slices[0] ?? null;
 
   const errorMessageForCode = useCallback(
     (code: UserFacingErrorCode) => t(errorKeyForCode(code)),
@@ -106,6 +172,50 @@ export function App() {
     setViewportStart(0);
     if (newDuration <= 0) setPeaks(null);
   }, []);
+
+  const replaceSliceHistory = useCallback((next: SliceHistoryState, push = true) => {
+    setSliceHistory((history) =>
+      push ? pushSliceHistory(history, next) : { ...history, present: next },
+    );
+  }, []);
+
+  const commitSliceResult = useCallback(
+    (result: {
+      markers: SliceMarker[];
+      selectedMarkerId: string | null;
+      selectedSliceId: string;
+      errorCode?: SliceEditErrorCode;
+    }) => {
+      if (result.errorCode) {
+        setInlineSliceError(result.errorCode);
+        return;
+      }
+      setInlineSliceError(null);
+      setInlineSliceMessage(null);
+      replaceSliceHistory({
+        markers: result.markers,
+        selectedMarkerId: result.selectedMarkerId,
+        selectedSliceId: result.selectedSliceId,
+      });
+    },
+    [replaceSliceHistory],
+  );
+
+  const initializeSlicesForSource = useCallback(
+    (nextSourceLength: number, nextSampleRate: number) => {
+      const slicesForSource = deriveSlices([], nextSourceLength, nextSampleRate);
+      setSliceHistory(
+        createSliceHistory({
+          markers: [],
+          selectedMarkerId: null,
+          selectedSliceId: slicesForSource[0]?.id ?? '',
+        }),
+      );
+      setInlineSliceError(null);
+      setInlineSliceMessage(null);
+    },
+    [],
+  );
 
   const importAudio = useCallback(
     async (resultPromise: Promise<LocalAudioFileResult>, label = t('source.open')) => {
@@ -141,6 +251,7 @@ export function App() {
         setMetadata(decoded.metadata);
         setPeaks(builtPeaks);
         setPlayback(playbackEngine.load(decoded.originalBuffer));
+        initializeSlicesForSource(decoded.originalBuffer.length, decoded.metadata.sampleRate);
         resetViewport(decoded.metadata.durationSeconds);
         setImportState({ status: 'ready', sourceId: decoded.metadata.id });
         setStatus('ready');
@@ -148,7 +259,7 @@ export function App() {
         applyImportError(error instanceof AudioImportError ? error.code : 'UNKNOWN_IMPORT');
       }
     },
-    [applyImportError, metadata, resetViewport, t],
+    [applyImportError, initializeSlicesForSource, metadata, resetViewport, t],
   );
 
   const openFile = useCallback(() => {
@@ -171,6 +282,9 @@ export function App() {
     setImportState({ status: 'empty' });
     setErrorMessage(null);
     setStatus('ready');
+    setSliceHistory(createSliceHistory(initialSliceState));
+    setInlineSliceError(null);
+    setInlineSliceMessage(null);
     resetViewport(0);
   }, [resetViewport]);
 
@@ -180,6 +294,15 @@ export function App() {
       setViewportStart(clamp(start, 0, Math.max(0, duration - nextDuration)));
     },
     [duration, zoom],
+  );
+
+  const revealSlice = useCallback(
+    (slice: SliceRegion | null) => {
+      if (!slice || duration <= 0) return;
+      if (slice.startSeconds >= viewportStart && slice.endSeconds <= viewportEnd) return;
+      setViewportSafely(slice.startSeconds, zoom);
+    },
+    [duration, setViewportSafely, viewportEnd, viewportStart, zoom],
   );
 
   const setZoomSafely = useCallback(
@@ -199,6 +322,196 @@ export function App() {
     setPlayback(playbackEngine.seek(position));
   }, []);
 
+  const selectSlice = useCallback(
+    (sliceId: string) => {
+      const slice = slices.find((candidate) => candidate.id === sliceId);
+      setSliceHistory((history) => ({
+        ...history,
+        present: {
+          ...history.present,
+          selectedMarkerId: null,
+          selectedSliceId: sliceId,
+        },
+      }));
+      revealSlice(slice ?? null);
+    },
+    [revealSlice, slices],
+  );
+
+  const selectSliceAtSample = useCallback(
+    (sampleIndex: number) => {
+      const slice = findSliceBySample(slices, sampleIndex);
+      if (slice) selectSlice(slice.id);
+    },
+    [selectSlice, slices],
+  );
+
+  const selectMarker = useCallback(
+    (markerId: string | null) => {
+      const nextSliceId =
+        markerId && slices.find((slice) => slice.leftBoundaryId === markerId)?.id
+          ? slices.find((slice) => slice.leftBoundaryId === markerId)?.id
+          : (selectedSlice?.id ?? slices[0]?.id ?? '');
+      setSliceHistory((history) => ({
+        ...history,
+        present: {
+          ...history.present,
+          selectedMarkerId: markerId,
+          selectedSliceId: nextSliceId ?? '',
+        },
+      }));
+    },
+    [selectedSlice?.id, slices],
+  );
+
+  const addMarkerAtSample = useCallback(
+    (sampleIndex: number) => {
+      const runtime = audioRuntimeStore.get();
+      const result = addMarker({
+        markers,
+        requestedSample: sampleIndex,
+        sourceLengthSamples,
+        sampleRate,
+        analysisMonoData: runtime?.analysisMonoData,
+        zeroCrossingEnabled,
+      });
+      commitSliceResult(result);
+    },
+    [commitSliceResult, markers, sampleRate, sourceLengthSamples, zeroCrossingEnabled],
+  );
+
+  const moveMarkerPreview = useCallback(
+    (markerId: string, sampleIndex: number) => {
+      if (!dragStartState.current) dragStartState.current = sliceHistory.present;
+      const result = moveMarker({
+        markers,
+        markerId,
+        requestedSample: sampleIndex,
+        sourceLengthSamples,
+        sampleRate,
+        zeroCrossingEnabled: false,
+      });
+      if (result.errorCode) return;
+      replaceSliceHistory(
+        {
+          markers: result.markers,
+          selectedMarkerId: result.selectedMarkerId,
+          selectedSliceId: result.selectedSliceId,
+        },
+        false,
+      );
+    },
+    [markers, replaceSliceHistory, sampleRate, sliceHistory.present, sourceLengthSamples],
+  );
+
+  const moveMarkerCommit = useCallback(
+    (markerId: string, sampleIndex: number) => {
+      const runtime = audioRuntimeStore.get();
+      const baseState = dragStartState.current ?? sliceHistory.present;
+      const result = moveMarker({
+        markers: baseState.markers,
+        markerId,
+        requestedSample: sampleIndex,
+        sourceLengthSamples,
+        sampleRate,
+        analysisMonoData: runtime?.analysisMonoData,
+        zeroCrossingEnabled,
+      });
+      dragStartState.current = null;
+      if (result.errorCode) {
+        setInlineSliceError(result.errorCode);
+        return;
+      }
+      setInlineSliceError(null);
+      setInlineSliceMessage(
+        t('slice.inlineMarkerMoved', {
+          sample: result.markers.find((m) => m.id === markerId)?.sampleIndex ?? sampleIndex,
+        }),
+      );
+      setSliceHistory((history) =>
+        pushSliceHistory(
+          { ...history, present: baseState },
+          {
+            markers: result.markers,
+            selectedMarkerId: result.selectedMarkerId,
+            selectedSliceId: result.selectedSliceId,
+          },
+        ),
+      );
+      setPlayback(playbackEngine.stopSliceAudition());
+    },
+    [sampleRate, sliceHistory.present, sourceLengthSamples, t, zeroCrossingEnabled],
+  );
+
+  const deleteSelectedMarker = useCallback(() => {
+    const result = deleteMarker({
+      markers,
+      markerId: sliceHistory.present.selectedMarkerId,
+      sourceLengthSamples,
+      sampleRate,
+    });
+    commitSliceResult(result);
+    setPlayback(playbackEngine.stopSliceAudition());
+  }, [
+    commitSliceResult,
+    markers,
+    sampleRate,
+    sliceHistory.present.selectedMarkerId,
+    sourceLengthSamples,
+  ]);
+
+  const resetSliceMarkers = useCallback(() => {
+    const result = resetMarkers(sourceLengthSamples, sampleRate);
+    commitSliceResult(result);
+    setPlayback(playbackEngine.stopSliceAudition());
+  }, [commitSliceResult, sampleRate, sourceLengthSamples]);
+
+  const applyEqualDivision = useCallback(
+    (count: number) => {
+      const result = equalDivide({ sliceCount: count, sourceLengthSamples, sampleRate });
+      commitSliceResult(result);
+      setPlayback(playbackEngine.stopSliceAudition());
+    },
+    [commitSliceResult, sampleRate, sourceLengthSamples],
+  );
+
+  const undo = useCallback(() => {
+    setSliceHistory((history) => undoSliceHistory(history));
+    setInlineSliceError(null);
+    setPlayback(playbackEngine.stopSliceAudition());
+  }, []);
+
+  const redo = useCallback(() => {
+    setSliceHistory((history) => redoSliceHistory(history));
+    setInlineSliceError(null);
+    setPlayback(playbackEngine.stopSliceAudition());
+  }, []);
+
+  const previousSlice = useCallback(() => {
+    if (!selectedSlice || selectedSlice.index <= 0) return;
+    selectSlice(slices[selectedSlice.index - 1].id);
+  }, [selectSlice, selectedSlice, slices]);
+
+  const nextSlice = useCallback(() => {
+    if (!selectedSlice || selectedSlice.index >= slices.length - 1) return;
+    selectSlice(slices[selectedSlice.index + 1].id);
+  }, [selectSlice, selectedSlice, slices]);
+
+  const auditionSelectedSlice = useCallback(() => {
+    if (!selectedSlice) return;
+    void playbackEngine
+      .auditionSlice({
+        startSeconds: selectedSlice.startSeconds,
+        endSeconds: selectedSlice.endSeconds,
+        prerollMs,
+      })
+      .then(setPlayback);
+  }, [prerollMs, selectedSlice]);
+
+  const playFullFile = useCallback(() => {
+    void playbackEngine.play().then(setPlayback);
+  }, []);
+
   useEffect(() => {
     const tick = (): void => {
       setPlayback(playbackEngine.snapshot());
@@ -213,9 +526,52 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      const target = event.target as HTMLElement | null;
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
+      if (isTextInputTarget(event.target)) return;
       if (!metadata) return;
+
+      if (event.ctrlKey && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (event.ctrlKey && event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (sliceHistory.present.selectedMarkerId) {
+          event.preventDefault();
+          deleteSelectedMarker();
+        }
+        return;
+      }
+      if (event.key === '[') {
+        event.preventDefault();
+        previousSlice();
+        return;
+      }
+      if (event.key === ']') {
+        event.preventDefault();
+        nextSlice();
+        return;
+      }
+      if (event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        auditionSelectedSlice();
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setPlayback(playbackEngine.stopSliceAudition());
+        return;
+      }
+      if (event.key.toLowerCase() === 'm') {
+        event.preventDefault();
+        setTool((current) => (current === 'select' ? 'add-marker' : 'select'));
+        return;
+      }
 
       if (event.code === 'Space') {
         event.preventDefault();
@@ -236,7 +592,19 @@ export function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [metadata, playback.loopEnabled, playback.positionSeconds, playback.status]);
+  }, [
+    auditionSelectedSlice,
+    deleteSelectedMarker,
+    metadata,
+    nextSlice,
+    playback.loopEnabled,
+    playback.positionSeconds,
+    playback.status,
+    previousSlice,
+    redo,
+    sliceHistory.present.selectedMarkerId,
+    undo,
+  ]);
 
   const handleDrop = useCallback(
     (event: DragEvent) => {
@@ -310,8 +678,33 @@ export function App() {
             />
           </PixelPanel>
 
-          <PixelPanel title={t('panel.analysis')} accent="mustard">
-            <div className="status-stack">
+          <PixelPanel title={t('panel.sliceSet')} accent="mustard">
+            <SliceSetPanel
+              markerCount={markers.length}
+              sliceCount={slices.length}
+              tool={tool}
+              canEdit={Boolean(metadata) && !isBusy}
+              canUndo={sliceHistory.past.length > 0}
+              canRedo={sliceHistory.future.length > 0}
+              canReset={markers.length > 0}
+              zeroCrossingEnabled={zeroCrossingEnabled}
+              customDivision={customDivision}
+              inlineError={inlineSliceError}
+              inlineMessage={
+                tool === 'add-marker' ? t('slice.inlineAddMarker') : inlineSliceMessage
+              }
+              onToolChange={setTool}
+              onUndo={undo}
+              onRedo={redo}
+              onReset={resetSliceMarkers}
+              onZeroCrossingChange={setZeroCrossingEnabled}
+              onEqualDivide={applyEqualDivision}
+              onCustomDivisionChange={setCustomDivision}
+            />
+          </PixelPanel>
+
+          <PixelPanel title={t('panel.analysis')} accent="violet">
+            <div className="status-stack status-stack--compact">
               <strong className="muted-label">{t('analysis.disabledLabel')}</strong>
               <p>{t('analysis.disabled')}</p>
             </div>
@@ -341,11 +734,29 @@ export function App() {
               playback={playback}
               viewportStart={viewportStart}
               viewportDuration={viewportDuration}
+              sourceLengthSamples={sourceLengthSamples}
+              sampleRate={sampleRate}
+              boundaries={boundaries}
+              selectedMarkerId={sliceHistory.present.selectedMarkerId}
+              selectedSlice={selectedSlice}
+              tool={tool}
               onSeek={seek}
               onPan={(delta) => setViewportSafely(viewportStart + delta)}
               onWheelZoom={(factor, anchor) => setZoomSafely(zoom * factor, anchor)}
+              onSelectSliceAtSample={selectSliceAtSample}
+              onSelectMarker={selectMarker}
+              onAddMarker={addMarkerAtSample}
+              onMoveMarkerPreview={moveMarkerPreview}
+              onMoveMarkerCommit={moveMarkerCommit}
             />
           </div>
+
+          <PixelSectionHeader label={t('section.sliceMap')} code={`${slices.length}`} />
+          <SliceMap
+            slices={slices}
+            selectedSliceId={selectedSlice?.id ?? null}
+            onSelectSlice={selectSlice}
+          />
 
           <PixelSectionHeader label={t('section.pattern')} code={t('pattern.disabledCode')} />
           <div className="pattern-workspace pattern-workspace--disabled">
@@ -369,7 +780,7 @@ export function App() {
               zoom={zoom}
               viewportStart={viewportStart}
               viewportEnd={viewportEnd}
-              onPlay={() => void playbackEngine.play().then(setPlayback)}
+              onPlay={playFullFile}
               onPause={() => setPlayback(playbackEngine.pause())}
               onStop={() => setPlayback(playbackEngine.stop())}
               onLoopChange={(enabled) => setPlayback(playbackEngine.setLoop(enabled))}
@@ -381,6 +792,22 @@ export function App() {
               onZoomIn={() => setZoomSafely(zoom * 1.5)}
               onZoomOut={() => setZoomSafely(zoom / 1.5)}
               onZoomChange={(nextZoom) => setZoomSafely(nextZoom)}
+            />
+          </PixelPanel>
+
+          <PixelPanel title={t('panel.selectedSlice')} accent="cobalt">
+            <SelectedSlicePanel
+              slice={selectedSlice}
+              sliceCount={slices.length}
+              selectedMarkerId={sliceHistory.present.selectedMarkerId}
+              prerollMs={prerollMs}
+              hasSource={Boolean(metadata)}
+              onPrevious={previousSlice}
+              onNext={nextSlice}
+              onAudition={auditionSelectedSlice}
+              onStopAudition={() => setPlayback(playbackEngine.stopSliceAudition())}
+              onPrerollChange={setPrerollMs}
+              onDeleteMarker={deleteSelectedMarker}
             />
           </PixelPanel>
         </aside>

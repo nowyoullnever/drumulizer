@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { PlaybackSnapshot, WaveformPeaks } from '../audio/types';
 import { clamp } from '../audio/time';
+import { sourceEndBoundaryId, sourceStartBoundaryId } from '../slice/sliceModel';
+import type { SliceBoundary, SliceRegion, WaveformTool } from '../slice/types';
 import { useI18n } from '../i18n/useI18n';
 
 interface WaveformCanvasProps {
@@ -8,23 +10,86 @@ interface WaveformCanvasProps {
   playback: PlaybackSnapshot;
   viewportStart: number;
   viewportDuration: number;
+  sourceLengthSamples: number;
+  sampleRate: number;
+  boundaries: SliceBoundary[];
+  selectedMarkerId: string | null;
+  selectedSlice: SliceRegion | null;
+  tool: WaveformTool;
   onSeek: (time: number) => void;
   onPan: (deltaSeconds: number) => void;
   onWheelZoom: (zoomFactor: number, anchorSeconds: number) => void;
+  onSelectSliceAtSample: (sampleIndex: number) => void;
+  onSelectMarker: (markerId: string | null) => void;
+  onAddMarker: (sampleIndex: number) => void;
+  onMoveMarkerPreview: (markerId: string, sampleIndex: number) => void;
+  onMoveMarkerCommit: (markerId: string, sampleIndex: number) => void;
 }
+
+const markerHitWidth = 12;
 
 export function WaveformCanvas({
   peaks,
   playback,
   viewportStart,
   viewportDuration,
+  sourceLengthSamples,
+  sampleRate,
+  boundaries,
+  selectedMarkerId,
+  selectedSlice,
+  tool,
   onSeek,
   onPan,
   onWheelZoom,
+  onSelectSliceAtSample,
+  onSelectMarker,
+  onAddMarker,
+  onMoveMarkerPreview,
+  onMoveMarkerCommit,
 }: WaveformCanvasProps) {
   const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const dragRef = useRef<{ x: number; start: number } | null>(null);
+  const dragRef = useRef<
+    | { type: 'pan'; x: number; start: number }
+    | { type: 'marker'; id: string; committed: boolean }
+    | null
+  >(null);
+
+  const viewportEnd = viewportStart + viewportDuration;
+
+  const secondsFromClientX = (clientX: number): number => {
+    const canvas = canvasRef.current;
+    if (!canvas) return 0;
+    const rect = canvas.getBoundingClientRect();
+    const x = clamp(clientX - rect.left, 0, rect.width);
+    return viewportStart + (x / rect.width) * viewportDuration;
+  };
+
+  const sampleFromClientX = (clientX: number): number =>
+    Math.round(secondsFromClientX(clientX) * sampleRate);
+
+  const boundaryFromClientX = (clientX: number): SliceBoundary | null => {
+    const canvas = canvasRef.current;
+    if (!canvas || sourceLengthSamples <= 0) return null;
+    const rect = canvas.getBoundingClientRect();
+    const x = clamp(clientX - rect.left, 0, rect.width);
+    const marker = boundaries
+      .filter((boundary) => {
+        if (boundary.id === sourceStartBoundaryId || boundary.id === sourceEndBoundaryId)
+          return false;
+        const seconds = boundary.sampleIndex / sampleRate;
+        if (seconds < viewportStart || seconds > viewportEnd) return false;
+        const markerX = ((seconds - viewportStart) / viewportDuration) * rect.width;
+        return Math.abs(markerX - x) <= markerHitWidth / 2;
+      })
+      .sort(
+        (left, right) =>
+          Math.abs(left.sampleIndex - sampleFromClientX(clientX)) -
+          Math.abs(right.sampleIndex - sampleFromClientX(clientX)),
+      )[0];
+    return marker ?? null;
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -41,8 +106,27 @@ export function WaveformCanvas({
     ctx.clearRect(0, 0, rect.width, rect.height);
     ctx.fillStyle = '#f0e4c5';
     ctx.fillRect(0, 0, rect.width, rect.height);
-    ctx.strokeStyle = '#261e1a';
-    ctx.lineWidth = 2;
+
+    if (selectedSlice && sourceLengthSamples > 0) {
+      const startSeconds = selectedSlice.startSample / sampleRate;
+      const endSeconds = selectedSlice.endSample / sampleRate;
+      const startX =
+        ((Math.max(viewportStart, startSeconds) - viewportStart) / viewportDuration) * rect.width;
+      const endX =
+        ((Math.min(viewportEnd, endSeconds) - viewportStart) / viewportDuration) * rect.width;
+      if (endX > startX) {
+        ctx.fillStyle = 'rgba(217, 74, 50, 0.24)';
+        ctx.fillRect(Math.round(startX), 0, Math.round(endX - startX), rect.height);
+        ctx.strokeStyle = '#d94a32';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          Math.round(startX) + 1,
+          1,
+          Math.max(2, Math.round(endX - startX) - 2),
+          rect.height - 2,
+        );
+      }
+    }
 
     const channelCount = peaks?.channels.length ?? 0;
     const lanes = Math.max(1, channelCount);
@@ -64,7 +148,6 @@ export function WaveformCanvas({
       return;
     }
 
-    const viewportEnd = viewportStart + viewportDuration;
     const secondsPerPixel = viewportDuration / rect.width;
 
     peaks.channels.forEach((channel, lane) => {
@@ -105,43 +188,109 @@ export function WaveformCanvas({
       if (tick % 5 === 0) ctx.fillText(`${tick}s`, x + 4, 24);
     }
 
+    boundaries.forEach((boundary, index) => {
+      const seconds = boundary.sampleIndex / sampleRate;
+      if (seconds < viewportStart || seconds > viewportEnd) return;
+      const x = Math.round((seconds - viewportStart) / secondsPerPixel);
+      const selected = boundary.id === selectedMarkerId;
+      ctx.strokeStyle = boundary.fixed
+        ? 'rgba(38, 30, 26, 0.36)'
+        : selected
+          ? '#d94a32'
+          : '#2755a5';
+      ctx.lineWidth = boundary.fixed ? 2 : selected ? 4 : 2;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, rect.height);
+      ctx.stroke();
+      if (!boundary.fixed) {
+        ctx.fillStyle = selected ? '#d9aa21' : '#261e1a';
+        ctx.fillRect(x - 6, 0, 12, selected ? 18 : 14);
+        ctx.strokeStyle = '#261e1a';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - 6, 0, 12, selected ? 18 : 14);
+        if (boundaries.length <= 66) {
+          ctx.fillStyle = selected ? '#261e1a' : '#f6edcf';
+          ctx.fillText(String(index), x + 8, 15);
+        }
+      }
+    });
+
     const playheadX = Math.round((playback.positionSeconds - viewportStart) / secondsPerPixel);
     if (playheadX >= 0 && playheadX <= rect.width) {
       ctx.fillStyle = '#27867b';
       ctx.fillRect(playheadX - 2, 0, 4, rect.height);
     }
-  }, [peaks, playback.positionSeconds, t, viewportDuration, viewportStart]);
-
-  const timeFromClientX = (clientX: number): number => {
-    const canvas = canvasRef.current;
-    if (!canvas) return 0;
-    const rect = canvas.getBoundingClientRect();
-    const x = clamp(clientX - rect.left, 0, rect.width);
-    return viewportStart + (x / rect.width) * viewportDuration;
-  };
+  }, [
+    boundaries,
+    peaks,
+    playback.positionSeconds,
+    sampleRate,
+    selectedMarkerId,
+    selectedSlice,
+    sourceLengthSamples,
+    t,
+    viewportDuration,
+    viewportEnd,
+    viewportStart,
+  ]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="waveform-canvas"
+      className={
+        tool === 'add-marker' ? 'waveform-canvas waveform-canvas--add-marker' : 'waveform-canvas'
+      }
       aria-label={t('waveform.label')}
       role="img"
+      tabIndex={0}
       onClick={(event) => {
         if (!peaks || dragRef.current) return;
-        onSeek(timeFromClientX(event.clientX));
+        const sample = sampleFromClientX(event.clientX);
+        if (tool === 'add-marker' || event.altKey) {
+          onAddMarker(sample);
+          return;
+        }
+        const marker = boundaryFromClientX(event.clientX);
+        if (marker) {
+          onSelectMarker(marker.id);
+          return;
+        }
+        onSelectMarker(null);
+        onSelectSliceAtSample(sample);
+        onSeek(secondsFromClientX(event.clientX));
       }}
       onPointerDown={(event) => {
         if (!peaks) return;
-        dragRef.current = { x: event.clientX, start: viewportStart };
-        event.currentTarget.setPointerCapture(event.pointerId);
+        const marker = boundaryFromClientX(event.clientX);
+        if (marker) {
+          dragRef.current = { type: 'marker', id: marker.id, committed: false };
+          onSelectMarker(marker.id);
+          event.currentTarget.setPointerCapture(event.pointerId);
+          return;
+        }
+        if (tool === 'select' && !event.altKey) {
+          dragRef.current = { type: 'pan', x: event.clientX, start: viewportStart };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
       }}
       onPointerMove={(event) => {
         if (!peaks || !dragRef.current) return;
+        if (dragRef.current.type === 'marker') {
+          dragRef.current.committed = true;
+          onMoveMarkerPreview(dragRef.current.id, sampleFromClientX(event.clientX));
+          return;
+        }
         const rect = event.currentTarget.getBoundingClientRect();
         const deltaPixels = event.clientX - dragRef.current.x;
-        onPan((-deltaPixels / rect.width) * viewportDuration);
+        onPan(
+          dragRef.current.start + (-deltaPixels / rect.width) * viewportDuration - viewportStart,
+        );
       }}
-      onPointerUp={() => {
+      onPointerUp={(event) => {
+        if (dragRef.current?.type === 'marker') {
+          onMoveMarkerCommit(dragRef.current.id, sampleFromClientX(event.clientX));
+        }
         window.setTimeout(() => {
           dragRef.current = null;
         }, 0);
@@ -149,7 +298,7 @@ export function WaveformCanvas({
       onWheel={(event) => {
         if (!peaks) return;
         event.preventDefault();
-        onWheelZoom(event.deltaY < 0 ? 1.2 : 0.84, timeFromClientX(event.clientX));
+        onWheelZoom(event.deltaY < 0 ? 1.2 : 0.84, secondsFromClientX(event.clientX));
       }}
     />
   );
