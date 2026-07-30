@@ -16,6 +16,37 @@ import type {
   SliceLibraryFilter,
   SliceLibrarySort,
 } from './audio/sliceAnalysis/sliceAnalysisTypes';
+import { SequencerEngine } from './sequencer/SequencerEngine';
+import {
+  clearLane,
+  clearPattern,
+  createDefaultPattern,
+  findEventAt,
+  paintEvent,
+  reconcilePatternSlices,
+  removeEvent,
+  removeEventAt,
+  resetEventParameters,
+  setLaneState,
+  setPatternBars,
+  setPatternBpm,
+  updateEvent,
+} from './sequencer/patternModel';
+import {
+  createPatternHistory,
+  pushPatternHistory,
+  redoPatternHistory,
+  undoPatternHistory,
+  type PatternHistory,
+} from './sequencer/history';
+import type {
+  MainWorkspaceMode,
+  SequencerEvent,
+  SequencerLaneId,
+  SequencerSliceContext,
+  SequencerTool,
+  SequencerTransportState,
+} from './sequencer/types';
 import {
   DEFAULT_ONSET_MINIMUM_GAP_MS,
   DEFAULT_ONSET_SENSITIVITY,
@@ -42,7 +73,9 @@ import { PixelButton } from './components/PixelButton';
 import { PixelDialog } from './components/PixelDialog';
 import { PixelPanel } from './components/PixelPanel';
 import { PixelSectionHeader } from './components/PixelSectionHeader';
+import { PixelTabs } from './components/PixelTabs';
 import { SelectedSlicePanel } from './components/SelectedSlicePanel';
+import { SequencerPanel } from './components/SequencerPanel';
 import { SliceLibraryPanel } from './components/SliceLibraryPanel';
 import { SliceMap } from './components/SliceMap';
 import { SliceSetPanel } from './components/SliceSetPanel';
@@ -86,12 +119,20 @@ const fallbackInfo: DrumulizerAppInfo = {
 const playbackEngine = new PlaybackEngine();
 const onsetWorkerClient = new OnsetWorkerClient();
 const sliceAnalysisWorkerClient = new SliceAnalysisWorkerClient();
+const sequencerEngine = new SequencerEngine();
 
 const initialSliceState: SliceHistoryState = {
   markers: [],
   selectedMarkerId: null,
   selectedSliceId: '',
 };
+
+const initialPatternState = () => ({
+  pattern: createDefaultPattern(),
+  selectedEventId: null,
+});
+
+const initialSequencerTransport = (): SequencerTransportState => sequencerEngine.snapshot();
 
 const makeDroppedAudioResult = async (file: File): Promise<LocalAudioFileResult> => ({
   canceled: false,
@@ -167,6 +208,19 @@ export function App() {
   });
   const [sliceLibraryFilter, setSliceLibraryFilter] = useState<SliceLibraryFilter>('all');
   const [sliceLibrarySort, setSliceLibrarySort] = useState<SliceLibrarySort>('index');
+  const [workspaceMode, setWorkspaceMode] = useState<MainWorkspaceMode>('library');
+  const [activeSliceId, setActiveSliceId] = useState<string | null>(null);
+  const [sequencerTool, setSequencerTool] = useState<SequencerTool>('select');
+  const [sequencerTransport, setSequencerTransport] =
+    useState<SequencerTransportState>(initialSequencerTransport);
+  const [focusedSequencerCell, setFocusedSequencerCell] = useState<{
+    laneId: SequencerLaneId;
+    stepIndex: number;
+  }>({ laneId: 'low', stepIndex: 0 });
+  const [patternMessage, setPatternMessage] = useState<string | null>(null);
+  const [patternHistory, setPatternHistory] = useState<PatternHistory>(() =>
+    createPatternHistory(initialPatternState()),
+  );
   const [inlineSliceError, setInlineSliceError] = useState<SliceEditErrorCode | null>(null);
   const [inlineSliceMessage, setInlineSliceMessage] = useState<string | null>(null);
   const [sliceHistory, setSliceHistory] = useState<SliceHistory>(() =>
@@ -224,6 +278,9 @@ export function App() {
             : 'not-analyzed';
   const selectedSlice =
     slices.find((slice) => slice.id === sliceHistory.present.selectedSliceId) ?? slices[0] ?? null;
+  const pattern = patternHistory.present.pattern;
+  const selectedEvent =
+    pattern.events.find((event) => event.id === patternHistory.present.selectedEventId) ?? null;
 
   const errorMessageForCode = useCallback(
     (code: UserFacingErrorCode) => t(errorKeyForCode(code)),
@@ -265,6 +322,29 @@ export function App() {
   const resetSliceAnnotations = useCallback(() => {
     setSliceAnnotations({ overrides: {}, excluded: {} });
   }, []);
+
+  const resetPattern = useCallback(() => {
+    sequencerEngine.stop();
+    setSequencerTransport(sequencerEngine.snapshot());
+    setPatternHistory(createPatternHistory(initialPatternState()));
+    setActiveSliceId(null);
+    setPatternMessage(null);
+    setFocusedSequencerCell({ laneId: 'low', stepIndex: 0 });
+  }, []);
+
+  const pushPatternEdit = useCallback(
+    (
+      nextPattern: typeof pattern,
+      selectedEventId: string | null,
+      message: string | null = null,
+    ) => {
+      setPatternHistory((history) =>
+        pushPatternHistory(history, { pattern: nextPattern, selectedEventId }),
+      );
+      setPatternMessage(message);
+    },
+    [],
+  );
 
   const cancelOnsetAnalysis = useCallback(() => {
     onsetGeneration.current += 1;
@@ -353,11 +433,13 @@ export function App() {
         if (generation !== importGeneration.current) return;
 
         playbackEngine.clear();
+        resetPattern();
         audioRuntimeStore.set(decoded);
         discardOnsetPreview();
         setMetadata(decoded.metadata);
         setPeaks(builtPeaks);
         setPlayback(playbackEngine.load(decoded.originalBuffer));
+        setSequencerTransport(sequencerEngine.load(decoded.originalBuffer));
         initializeSlicesForSource(decoded.originalBuffer.length, decoded.metadata.sampleRate);
         resetViewport(decoded.metadata.durationSeconds);
         setImportState({ status: 'ready', sourceId: decoded.metadata.id });
@@ -375,6 +457,7 @@ export function App() {
       metadata,
       resetViewport,
       resetSliceAnnotations,
+      resetPattern,
       t,
     ],
   );
@@ -395,6 +478,7 @@ export function App() {
     cancelSliceAnalysis();
     discardOnsetPreview();
     playbackEngine.clear();
+    sequencerEngine.clear();
     audioRuntimeStore.clear();
     setMetadata(null);
     setPeaks(null);
@@ -403,6 +487,7 @@ export function App() {
     setErrorMessage(null);
     setStatus('ready');
     setSliceHistory(createSliceHistory(initialSliceState));
+    resetPattern();
     setSliceAnalysisResult(null);
     setSliceAnalysisError(null);
     resetSliceAnnotations();
@@ -414,6 +499,7 @@ export function App() {
     cancelSliceAnalysis,
     discardOnsetPreview,
     resetSliceAnnotations,
+    resetPattern,
     resetViewport,
   ]);
 
@@ -618,6 +704,7 @@ export function App() {
           selectedSliceId: sliceId,
         },
       }));
+      setActiveSliceId(sliceId);
       revealSlice(slice ?? null);
     },
     [revealSlice, slices],
@@ -784,6 +871,7 @@ export function App() {
 
   const auditionSelectedSlice = useCallback(() => {
     if (!selectedSlice) return;
+    setSequencerTransport(sequencerEngine.stop());
     void playbackEngine
       .auditionSlice({
         startSeconds: selectedSlice.startSeconds,
@@ -842,18 +930,21 @@ export function App() {
       (preview) => preview.id === selectedPreviewCandidateId,
     );
     if (!candidate) return;
+    setSequencerTransport(sequencerEngine.stop());
     void playbackEngine
       .auditionCandidate({ sampleIndex: candidate.sampleIndex, sampleRate })
       .then(setPlayback);
   }, [previewCandidates, sampleRate, selectedPreviewCandidateId]);
 
   const playFullFile = useCallback(() => {
+    setSequencerTransport(sequencerEngine.stop());
     void playbackEngine.play().then(setPlayback);
   }, []);
 
   useEffect(() => {
     const tick = (): void => {
       setPlayback(playbackEngine.snapshot());
+      setSequencerTransport(sequencerEngine.snapshot());
       animationFrame.current = window.requestAnimationFrame(tick);
     };
     animationFrame.current = window.requestAnimationFrame(tick);
@@ -861,6 +952,7 @@ export function App() {
       if (animationFrame.current) window.cancelAnimationFrame(animationFrame.current);
       onsetWorkerClient.cancel();
       sliceAnalysisWorkerClient.cancel();
+      sequencerEngine.clear();
       playbackEngine.clear();
     };
   }, []);
@@ -874,11 +966,29 @@ export function App() {
       previousSliceSignature.current &&
       previousSliceSignature.current !== currentSliceSignature
     ) {
+      setSequencerTransport(sequencerEngine.stop());
+      setPatternHistory((history) => {
+        const result = reconcilePatternSlices({
+          pattern: history.present.pattern,
+          slices,
+          selectedEventId: history.present.selectedEventId,
+        });
+        if (!result.changed) return history;
+        setPatternMessage(t('sequencer.eventsRemoved', { count: result.removedCount ?? 0 }));
+        return pushPatternHistory(history, {
+          pattern: result.pattern,
+          selectedEventId: result.selectedEventId,
+        });
+      });
       resetSliceAnnotations();
       setPlayback(playbackEngine.stopSliceAudition());
     }
     previousSliceSignature.current = currentSliceSignature;
-  }, [currentSliceSignature, metadata, resetSliceAnnotations]);
+  }, [currentSliceSignature, metadata, resetSliceAnnotations, slices, t]);
+
+  useEffect(() => {
+    setSequencerTransport(sequencerEngine.update(pattern, slices));
+  }, [pattern, slices]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -999,21 +1109,247 @@ export function App() {
   );
 
   const isBusy = ['reading', 'decoding', 'building-waveform'].includes(importState.status);
+  const sliceAnalysisById = useMemo(
+    () =>
+      new Map(
+        (sliceAnalysisResult?.analyses ?? []).map((analysis) => [analysis.sliceId, analysis]),
+      ),
+    [sliceAnalysisResult?.analyses],
+  );
   const roleBySliceId = useMemo(() => {
-    const analysisById = new Map(
-      (sliceAnalysisResult?.analyses ?? []).map((analysis) => [analysis.sliceId, analysis]),
-    );
     return Object.fromEntries(
       slices.map((slice) => [
         slice.id,
         calculateEffectiveRole(
-          analysisById.get(slice.id) ?? null,
+          sliceAnalysisById.get(slice.id) ?? null,
           sliceAnnotations.overrides[slice.id],
           Boolean(sliceAnnotations.excluded[slice.id]),
         ),
       ]),
     );
-  }, [sliceAnalysisResult?.analyses, sliceAnnotations, slices]);
+  }, [sliceAnalysisById, sliceAnnotations, slices]);
+  const sliceContextById = useMemo(() => {
+    return Object.fromEntries(
+      slices.map((slice) => {
+        const analysis = sliceAnalysisById.get(slice.id) ?? null;
+        return [
+          slice.id,
+          {
+            slice,
+            effectiveRole: calculateEffectiveRole(
+              analysis,
+              sliceAnnotations.overrides[slice.id],
+              Boolean(sliceAnnotations.excluded[slice.id]),
+            ),
+            excluded: Boolean(sliceAnnotations.excluded[slice.id]),
+            confidence: analysis?.confidence ?? null,
+          } satisfies SequencerSliceContext,
+        ];
+      }),
+    );
+  }, [sliceAnalysisById, sliceAnnotations, slices]);
+  const activeSliceContext = activeSliceId ? (sliceContextById[activeSliceId] ?? null) : null;
+  const selectedEventContext = selectedEvent
+    ? (sliceContextById[selectedEvent.sliceId] ?? null)
+    : null;
+
+  const editLocked = sequencerTransport.status !== 'stopped';
+
+  const setPatternPresent = useCallback(
+    (nextPattern: typeof pattern, selectedEventId = patternHistory.present.selectedEventId) => {
+      setPatternHistory((history) => ({
+        ...history,
+        present: { pattern: nextPattern, selectedEventId },
+      }));
+    },
+    [patternHistory.present.selectedEventId],
+  );
+
+  const handleSequencerGridAction = useCallback(
+    (laneId: SequencerLaneId, stepIndex: number) => {
+      setFocusedSequencerCell({ laneId, stepIndex });
+      if (editLocked) {
+        setPatternMessage(t('sequencer.editLocked'));
+        return;
+      }
+      if (sequencerTool === 'select') {
+        const event = findEventAt(pattern, laneId, stepIndex);
+        setPatternHistory((history) => ({
+          ...history,
+          present: { ...history.present, selectedEventId: event?.id ?? null },
+        }));
+        return;
+      }
+      if (sequencerTool === 'paint') {
+        const result = paintEvent({ pattern, laneId, stepIndex, sliceId: activeSliceId });
+        if (!result.changed) {
+          setPatternMessage(t('sequencer.noActiveSlice'));
+          return;
+        }
+        pushPatternEdit(result.pattern, result.selectedEventId);
+        return;
+      }
+      const event = findEventAt(pattern, laneId, stepIndex);
+      const result = removeEventAt(pattern, laneId, stepIndex);
+      if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+      else if (!event) setPatternMessage(null);
+    },
+    [activeSliceId, editLocked, pattern, pushPatternEdit, sequencerTool, t],
+  );
+
+  const updateSelectedPatternEvent = useCallback(
+    (
+      eventId: string,
+      patch: Partial<Pick<SequencerEvent, 'velocity' | 'pan' | 'pitchSemitones'>>,
+    ) => {
+      if (editLocked) {
+        setPatternMessage(t('sequencer.editLocked'));
+        return;
+      }
+      const result = updateEvent(pattern, eventId, patch);
+      if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+    },
+    [editLocked, pattern, pushPatternEdit, t],
+  );
+
+  const replaceSelectedWithActiveSlice = useCallback(() => {
+    if (editLocked || !selectedEvent || !activeSliceId) return;
+    const result = updateEvent(pattern, selectedEvent.id, { sliceId: activeSliceId });
+    if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+  }, [activeSliceId, editLocked, pattern, pushPatternEdit, selectedEvent]);
+
+  const resetSelectedEvent = useCallback(() => {
+    if (editLocked || !selectedEvent) return;
+    const result = resetEventParameters(pattern, selectedEvent.id);
+    if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+  }, [editLocked, pattern, pushPatternEdit, selectedEvent]);
+
+  const removeSelectedPatternEvent = useCallback(() => {
+    if (editLocked) return;
+    const result = removeEvent(pattern, patternHistory.present.selectedEventId);
+    if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+  }, [editLocked, pattern, patternHistory.present.selectedEventId, pushPatternEdit]);
+
+  const clearPatternLane = useCallback(
+    (laneId: SequencerLaneId) => {
+      if (editLocked) return;
+      const result = clearLane(pattern, laneId, patternHistory.present.selectedEventId);
+      if (result.changed)
+        pushPatternEdit(
+          result.pattern,
+          result.selectedEventId,
+          t('sequencer.eventsRemoved', { count: result.removedCount ?? 0 }),
+        );
+    },
+    [editLocked, pattern, patternHistory.present.selectedEventId, pushPatternEdit, t],
+  );
+
+  const clearWholePattern = useCallback(() => {
+    if (editLocked) return;
+    const result = clearPattern(pattern);
+    if (result.changed)
+      pushPatternEdit(
+        result.pattern,
+        result.selectedEventId,
+        t('sequencer.eventsRemoved', { count: result.removedCount ?? 0 }),
+      );
+  }, [editLocked, pattern, pushPatternEdit, t]);
+
+  const playPattern = useCallback(() => {
+    const runtime = audioRuntimeStore.get();
+    if (!runtime) return;
+    setPlayback(playbackEngine.stop());
+    void sequencerEngine.play(pattern, slices).then(setSequencerTransport);
+  }, [pattern, slices]);
+
+  const pausePattern = useCallback(() => {
+    setSequencerTransport(sequencerEngine.pause());
+  }, []);
+
+  const stopPattern = useCallback(() => {
+    setSequencerTransport(sequencerEngine.stop());
+  }, []);
+
+  const setPatternLoop = useCallback(
+    (enabled: boolean) => {
+      setPatternPresent({ ...pattern, loopEnabled: enabled });
+    },
+    [pattern, setPatternPresent],
+  );
+
+  const setLaneMuted = useCallback(
+    (laneId: SequencerLaneId, muted: boolean) => {
+      setPatternPresent(setLaneState(pattern, laneId, { muted }));
+    },
+    [pattern, setPatternPresent],
+  );
+
+  const setLaneSoloed = useCallback(
+    (laneId: SequencerLaneId, soloed: boolean) => {
+      setPatternPresent(setLaneState(pattern, laneId, { soloed }));
+    },
+    [pattern, setPatternPresent],
+  );
+
+  const setLaneGain = useCallback(
+    (laneId: SequencerLaneId, gainDb: number) => {
+      setPatternPresent(setLaneState(pattern, laneId, { gainDb }));
+    },
+    [pattern, setPatternPresent],
+  );
+
+  const changePatternBpm = useCallback(
+    (bpm: number) => {
+      if (editLocked) {
+        setPatternMessage(t('sequencer.editLocked'));
+        return;
+      }
+      pushPatternEdit(setPatternBpm(pattern, bpm), patternHistory.present.selectedEventId);
+    },
+    [editLocked, pattern, patternHistory.present.selectedEventId, pushPatternEdit, t],
+  );
+
+  const changePatternBars = useCallback(
+    (bars: number) => {
+      if (editLocked) {
+        setPatternMessage(t('sequencer.editLocked'));
+        return;
+      }
+      const result = setPatternBars(pattern, bars, patternHistory.present.selectedEventId);
+      if (result.changed)
+        pushPatternEdit(
+          result.pattern,
+          result.selectedEventId,
+          result.removedCount ? t('sequencer.eventsRemoved', { count: result.removedCount }) : null,
+        );
+    },
+    [editLocked, pattern, patternHistory.present.selectedEventId, pushPatternEdit, t],
+  );
+
+  const undoPattern = useCallback(() => {
+    if (editLocked) return;
+    setPatternHistory((history) => undoPatternHistory(history));
+  }, [editLocked]);
+
+  const redoPattern = useCallback(() => {
+    if (editLocked) return;
+    setPatternHistory((history) => redoPatternHistory(history));
+  }, [editLocked]);
+
+  const auditionSelectedEvent = useCallback(() => {
+    const runtime = audioRuntimeStore.get();
+    if (!runtime || !selectedEvent || !selectedEventContext) return;
+    setPlayback(playbackEngine.stop());
+    void sequencerEngine
+      .auditionEvent({
+        event: selectedEvent,
+        pattern,
+        slices,
+        buffer: runtime.originalBuffer,
+        masterGain: playback.masterGain,
+      })
+      .then(() => setSequencerTransport(sequencerEngine.snapshot()));
+  }, [pattern, playback.masterGain, selectedEvent, selectedEventContext, slices]);
 
   return (
     <main
@@ -1163,54 +1499,125 @@ export function App() {
           />
 
           <PixelSectionHeader
-            label={t('section.sliceLibrary')}
-            code={t(`sliceAnalysis.status.${sliceAnalysisLifecycle}`)}
+            label={t('section.patternWorkspace')}
+            code={workspaceMode === 'library' ? t('section.sliceLibrary') : t('section.sequencer')}
           />
-          <SliceLibraryPanel
-            slices={slices}
-            selectedSliceId={selectedSlice?.id ?? null}
-            lifecycle={sliceAnalysisLifecycle}
-            result={sliceAnalysisResult}
-            progress={sliceAnalysisProgress}
-            filter={sliceLibraryFilter}
-            sort={sliceLibrarySort}
-            annotations={sliceAnnotations}
-            onAnalyze={analyzeCommittedSlices}
-            onFilterChange={setSliceLibraryFilter}
-            onSortChange={setSliceLibrarySort}
-            onSelectSlice={selectSlice}
-            onOverride={(sliceId, override) =>
-              setSliceAnnotations((current) => ({
-                ...current,
-                overrides: { ...current.overrides, [sliceId]: override },
-              }))
-            }
-            onExclude={(sliceId, excluded) =>
-              setSliceAnnotations((current) => ({
-                ...current,
-                excluded: { ...current.excluded, [sliceId]: excluded },
-              }))
-            }
-            onResetSelected={(sliceId) =>
-              setSliceAnnotations((current) => {
-                const overrides = { ...current.overrides };
-                const excluded = { ...current.excluded };
-                delete overrides[sliceId];
-                delete excluded[sliceId];
-                return { overrides, excluded };
-              })
-            }
-            onResetAll={resetSliceAnnotations}
-            onIncludeAll={() =>
-              setSliceAnnotations((current) => ({
-                ...current,
-                excluded: {},
-              }))
-            }
-          />
-          {sliceAnalysisError ? (
-            <p className="analysis-panel__message">{sliceAnalysisError}</p>
-          ) : null}
+          <div className="workspace-switcher">
+            <PixelTabs
+              tabs={[t('section.sliceLibrary'), t('section.sequencer')]}
+              selected={
+                workspaceMode === 'library' ? t('section.sliceLibrary') : t('section.sequencer')
+              }
+              onSelect={(label) =>
+                setWorkspaceMode(label === t('section.sequencer') ? 'sequencer' : 'library')
+              }
+            />
+            {workspaceMode === 'library' ? (
+              <>
+                <SliceLibraryPanel
+                  slices={slices}
+                  selectedSliceId={selectedSlice?.id ?? null}
+                  lifecycle={sliceAnalysisLifecycle}
+                  result={sliceAnalysisResult}
+                  progress={sliceAnalysisProgress}
+                  filter={sliceLibraryFilter}
+                  sort={sliceLibrarySort}
+                  annotations={sliceAnnotations}
+                  onAnalyze={analyzeCommittedSlices}
+                  onFilterChange={setSliceLibraryFilter}
+                  onSortChange={setSliceLibrarySort}
+                  onSelectSlice={selectSlice}
+                  onOverride={(sliceId, override) =>
+                    setSliceAnnotations((current) => ({
+                      ...current,
+                      overrides: { ...current.overrides, [sliceId]: override },
+                    }))
+                  }
+                  onExclude={(sliceId, excluded) =>
+                    setSliceAnnotations((current) => ({
+                      ...current,
+                      excluded: { ...current.excluded, [sliceId]: excluded },
+                    }))
+                  }
+                  onResetSelected={(sliceId) =>
+                    setSliceAnnotations((current) => {
+                      const overrides = { ...current.overrides };
+                      const excluded = { ...current.excluded };
+                      delete overrides[sliceId];
+                      delete excluded[sliceId];
+                      return { overrides, excluded };
+                    })
+                  }
+                  onResetAll={resetSliceAnnotations}
+                  onIncludeAll={() =>
+                    setSliceAnnotations((current) => ({
+                      ...current,
+                      excluded: {},
+                    }))
+                  }
+                />
+                {sliceAnalysisError ? (
+                  <p className="analysis-panel__message">{sliceAnalysisError}</p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <SequencerPanel
+                  pattern={pattern}
+                  transport={sequencerTransport}
+                  tool={sequencerTool}
+                  activeSlice={activeSliceContext}
+                  selectedEvent={selectedEvent}
+                  selectedEventContext={selectedEventContext}
+                  sliceContextById={sliceContextById}
+                  selectedEventId={patternHistory.present.selectedEventId}
+                  focusedLaneId={focusedSequencerCell.laneId}
+                  focusedStepIndex={focusedSequencerCell.stepIndex}
+                  masterGain={playback.masterGain}
+                  onToolChange={setSequencerTool}
+                  onBpmChange={changePatternBpm}
+                  onBarsChange={changePatternBars}
+                  onLoopChange={setPatternLoop}
+                  onPlay={playPattern}
+                  onPause={pausePattern}
+                  onStop={stopPattern}
+                  onGridAction={handleSequencerGridAction}
+                  onFocusCell={(laneId, stepIndex) =>
+                    setFocusedSequencerCell({ laneId, stepIndex })
+                  }
+                  onClearActiveSlice={() => setActiveSliceId(null)}
+                  onAuditionActiveSlice={() => {
+                    if (!activeSliceContext) return;
+                    setSequencerTransport(sequencerEngine.stop());
+                    void playbackEngine
+                      .auditionSlice({
+                        startSeconds: activeSliceContext.slice.startSeconds,
+                        endSeconds: activeSliceContext.slice.endSeconds,
+                        prerollMs,
+                      })
+                      .then(setPlayback);
+                  }}
+                  onLaneMute={setLaneMuted}
+                  onLaneSolo={setLaneSoloed}
+                  onLaneGain={setLaneGain}
+                  onClearLane={clearPatternLane}
+                  onClearPattern={clearWholePattern}
+                  onUndo={undoPattern}
+                  onRedo={redoPattern}
+                  canUndo={patternHistory.past.length > 0}
+                  canRedo={patternHistory.future.length > 0}
+                  onUpdateEvent={updateSelectedPatternEvent}
+                  onReplaceSelectedEvent={replaceSelectedWithActiveSlice}
+                  onResetSelectedEvent={resetSelectedEvent}
+                  onRemoveSelectedEvent={removeSelectedPatternEvent}
+                  onAuditionSelectedEvent={auditionSelectedEvent}
+                />
+                {patternMessage ? (
+                  <p className="analysis-panel__message">{patternMessage}</p>
+                ) : null}
+              </>
+            )}
+          </div>
         </section>
 
         <aside className="control-rail">

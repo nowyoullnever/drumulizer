@@ -1,5 +1,5 @@
 export const APP_NAME = 'Drumulizer';
-export const APP_VERSION = '0.5.0';
+export const APP_VERSION = '0.6.0';
 export const PRODUCT_NAME = 'Drumulizer';
 export const APP_ID = 'com.nowyoullnever.drumulizer';
-export const WINDOW_TITLE = 'Drumulizer v0.5.0';
+export const WINDOW_TITLE = 'Drumulizer v0.6.0';

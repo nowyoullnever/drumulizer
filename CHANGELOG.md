@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0] - 2026-07-30
+
+- Added a manual four-lane LOW/MID/HIGH/TEXTURE sequencer with fixed 4/4 sixteenth-note grids, 1-4 bar patterns, and 40-240 BPM control.
+- Added Slice Library to sequencer workflow with active-slice placement, select/paint/erase tools, event selection, event audition, and slice-reference reconciliation after source or slice edits.
+- Added per-event velocity, pan, and pitch controls plus lane mute, solo, volume, clear-lane, clear-pattern, pattern undo, and pattern redo controls.
+- Added a deterministic Web Audio look-ahead scheduling engine with loop-safe scheduling keys, bounded active voices, click-reducing event fades, and transport play/pause/stop/loop state.
+- Added focused sequencer model, scheduler, and UI tests through `npm run test:sequencer`.
+- Updated bilingual Korean/English UI copy, documentation, and version metadata for v0.6.0.
+
 ## [0.5.0] - 2026-07-30
 
 - Added worker-based committed slice analysis for `SliceRegion[]` using local analysis-only mono PCM.
