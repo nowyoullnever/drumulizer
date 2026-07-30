@@ -1,5 +1,6 @@
 import type { PlaybackSnapshot } from '../audio/types';
 import { formatSeconds } from '../audio/time';
+import { useI18n } from '../i18n/useI18n';
 import { PixelButton } from './PixelButton';
 import { PixelIconButton } from './PixelIconButton';
 import { PixelSlider } from './PixelSlider';
@@ -38,33 +39,45 @@ export function TransportControls({
   onZoomOut,
   onZoomChange,
 }: TransportControlsProps) {
+  const { t } = useI18n();
+
   return (
     <div className="transport">
       <div className="transport__row">
-        <PixelIconButton label="재생" icon="PLAY" onClick={onPlay} disabled={!hasSource} />
         <PixelIconButton
-          label="일시정지"
+          label={t('transport.play')}
+          icon="PLAY"
+          onClick={onPlay}
+          disabled={!hasSource}
+        />
+        <PixelIconButton
+          label={t('transport.pause')}
           icon="PAUSE"
           onClick={onPause}
           disabled={playback.status !== 'playing'}
         />
-        <PixelIconButton label="정지" icon="STOP" onClick={onStop} disabled={!hasSource} />
+        <PixelIconButton
+          label={t('transport.stop')}
+          icon="STOP"
+          onClick={onStop}
+          disabled={!hasSource}
+        />
         <PixelToggle
-          label="Loop"
+          label={t('transport.loop')}
           checked={playback.loopEnabled}
           onChange={(event) => onLoopChange(event.currentTarget.checked)}
           disabled={!hasSource}
         />
       </div>
 
-      <div className="transport__time" aria-label="재생 시간">
+      <div className="transport__time" aria-label={t('transport.timeLabel')}>
         <span>{formatSeconds(playback.positionSeconds)}</span>
         <span>/</span>
         <strong>{formatSeconds(playback.durationSeconds)}</strong>
       </div>
 
       <PixelSlider
-        label="Master"
+        label={t('transport.master')}
         min={0}
         max={100}
         value={Math.round(playback.masterGain * 100)}
@@ -74,14 +87,24 @@ export function TransportControls({
 
       <div className="transport__row">
         <PixelButton onClick={onFit} disabled={!hasSource}>
-          FIT
+          {t('transport.fit')}
         </PixelButton>
-        <PixelIconButton label="축소" icon="-" onClick={onZoomOut} disabled={!hasSource} />
-        <PixelIconButton label="확대" icon="+" onClick={onZoomIn} disabled={!hasSource} />
+        <PixelIconButton
+          label={t('transport.zoomOut')}
+          icon="-"
+          onClick={onZoomOut}
+          disabled={!hasSource}
+        />
+        <PixelIconButton
+          label={t('transport.zoomIn')}
+          icon="+"
+          onClick={onZoomIn}
+          disabled={!hasSource}
+        />
       </div>
 
       <PixelSlider
-        label="Zoom"
+        label={t('transport.zoom')}
         min={1}
         max={16}
         value={zoom}
@@ -90,7 +113,10 @@ export function TransportControls({
       />
 
       <div className="viewport-readout">
-        보기 {formatSeconds(viewportStart)} - {formatSeconds(viewportEnd)}
+        {t('transport.viewport', {
+          start: formatSeconds(viewportStart),
+          end: formatSeconds(viewportEnd),
+        })}
       </div>
     </div>
   );

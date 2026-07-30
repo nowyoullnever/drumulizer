@@ -4,9 +4,12 @@ export interface DrumulizerAppInfo {
   platform: string;
 }
 
-export type AppStatus = 'ready' | 'busy' | 'warning' | 'error';
+export type AppStatus = 'ready' | 'processing' | 'error';
 
 export type SupportedAudioExtension = 'wav' | 'mp3';
+
+export type LocalAudioFileErrorCode =
+  'UNSUPPORTED_EXTENSION' | 'NOT_A_REGULAR_FILE' | 'EMPTY_FILE' | 'FILE_TOO_LARGE' | 'READ_FAILED';
 
 export interface LocalAudioFileResult {
   canceled: boolean;
@@ -15,7 +18,7 @@ export interface LocalAudioFileResult {
   mimeType?: string;
   fileSizeBytes?: number;
   bytes?: ArrayBuffer;
-  errorMessage?: string;
+  errorCode?: LocalAudioFileErrorCode;
 }
 
 export interface DrumulizerApi {

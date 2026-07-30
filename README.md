@@ -51,6 +51,14 @@ Version work begins with a GitHub Issue, proceeds on a feature branch, and lands
 
 The CI workflow runs install, lint, formatting check, type checking, tests, production build, and Windows packaging verification.
 
+`npm run dist:win` passes `--publish never` to electron-builder so local and CI packaging cannot attempt release publishing or require `GH_TOKEN`.
+
+## Interface Localization
+
+The renderer includes internal Korean and English dictionaries, detects the initial locale from `navigator.language`, and persists the user's language choice in local storage. UI copy and user-facing import errors are resolved through the renderer `t()` helper; main/preload code returns stable error codes rather than localized messages.
+
+The primary header contains one noninteractive app status module with `ready`, `processing`, and `error` states. Legacy offline badges and placeholder system metrics are not shown in the main UI.
+
 ## Planned Direction
 
 Future versions will add manual slicing, offline onset detection, slice role scoring, HPSS-derived slices, sequencing, IDM pattern generation, granular processing, project saves, and WAV/stem export.

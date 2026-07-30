@@ -32,6 +32,12 @@ Reusable presets: checker, diagonal stripe, halftone dot, stepped block, and wid
 
 Components support hover, active, selected, pressed, disabled, and focus-visible states. Icon-only controls need `aria-label`.
 
+## Header Status
+
+The primary shell exposes one noninteractive app status module in the header next to the language switch and About action. It supports only `ready`, `processing`, and `error`, announces changes politely, and must not be duplicated by footer strips, offline badges, or placeholder system metrics.
+
+The language switch is a compact radio group. It should preserve the current workspace state when toggled and must not imply network mode changes.
+
 ## Future Lane Mapping
 
 - LOW: tomato/orange with horizontal band pattern

@@ -17,7 +17,7 @@ const normalizeExtension = (filePath: string): SupportedAudioExtension | null =>
 export const registerAudioFileHandlers = (window: BrowserWindow): void => {
   ipcMain.handle(AUDIO_IMPORT_CHANNEL, async (): Promise<LocalAudioFileResult> => {
     const result = await dialog.showOpenDialog(window, {
-      title: '오디오 파일 열기',
+      title: 'Open Audio File',
       properties: ['openFile'],
       filters: [{ name: 'Audio', extensions: ['wav', 'mp3'] }],
     });
@@ -29,32 +29,35 @@ export const registerAudioFileHandlers = (window: BrowserWindow): void => {
     const [filePath] = result.filePaths;
     const extension = normalizeExtension(filePath);
     if (!extension) {
-      return {
-        canceled: false,
-        errorMessage: '지원하지 않는 파일 형식입니다. WAV 또는 MP3 파일을 선택하세요.',
-      };
+      return { canceled: false, errorCode: 'UNSUPPORTED_EXTENSION' };
     }
 
-    const fileStat = await stat(filePath);
+    let fileStat: Awaited<ReturnType<typeof stat>>;
+    try {
+      fileStat = await stat(filePath);
+    } catch {
+      return { canceled: false, errorCode: 'READ_FAILED' };
+    }
+
     if (!fileStat.isFile()) {
-      return {
-        canceled: false,
-        errorMessage: '폴더는 불러올 수 없습니다. 오디오 파일을 선택하세요.',
-      };
+      return { canceled: false, errorCode: 'NOT_A_REGULAR_FILE' };
     }
 
     if (fileStat.size === 0) {
-      return { canceled: false, errorMessage: '빈 파일은 불러올 수 없습니다.' };
+      return { canceled: false, errorCode: 'EMPTY_FILE' };
     }
 
     if (fileStat.size > MAX_AUDIO_FILE_BYTES) {
-      return {
-        canceled: false,
-        errorMessage: '파일 크기는 250MB를 넘을 수 없습니다.',
-      };
+      return { canceled: false, errorCode: 'FILE_TOO_LARGE' };
     }
 
-    const bytes = await readFile(filePath);
+    let bytes: Buffer;
+    try {
+      bytes = await readFile(filePath);
+    } catch {
+      return { canceled: false, errorCode: 'READ_FAILED' };
+    }
+
     const arrayBuffer = bytes.buffer.slice(
       bytes.byteOffset,
       bytes.byteOffset + bytes.byteLength,

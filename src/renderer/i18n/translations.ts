@@ -1,0 +1,215 @@
+export const locales = ['ko', 'en'] as const;
+
+export type Locale = (typeof locales)[number];
+
+export const defaultLocale: Locale = 'ko';
+
+export const translations = {
+  ko: {
+    'app.subtitle': '프로젝트: UNTITLED / 로컬 오디오 작업공간',
+    'app.workspace': '오디오 작업공간',
+    'app.noSample': '샘플 없음',
+    'app.analysisPending': '분석 모듈 준비 중',
+    'app.patternEngine': '패턴 엔진 - v0.7.0',
+    'app.errorTitle': '오류',
+    'app.about': '정보',
+    'app.aboutTitle': 'Drumulizer 정보',
+    'app.aboutIntro':
+      'Drumulizer v{version}은 로컬 WAV/MP3 불러오기, 파형 표시, 기본 재생을 제공합니다.',
+    'app.aboutOffline':
+      '네트워크 불러오기, 원격 API, 텔레메트리, CDN, 원격 에셋은 사용하지 않습니다.',
+    'app.aboutShortcuts':
+      '단축키: Space 재생/일시정지, Home 처음으로, 화살표 좌우 이동, Shift+화살표 크게 이동, L 루프.',
+    'app.aboutTypeface':
+      'Typeface: x10y12pxDenkiChipHangul, bundled locally under the SIL Open Font License.',
+    'app.repository': 'Repository: nowyoullnever/drumulizer',
+    'status.label': '앱 상태',
+    'status.ready': '준비됨',
+    'status.processing': '처리 중',
+    'status.error': '확인 필요',
+    'language.label': '언어',
+    'language.ko': '한국어',
+    'language.en': 'English',
+    'panel.source': '소스',
+    'panel.analysis': '분석',
+    'panel.transport': '재생',
+    'section.waveform': '파형 작업공간',
+    'section.pattern': '패턴 작업공간',
+    'section.empty': '비어 있음',
+    'source.open': '파일 열기',
+    'source.replace': '파일 바꾸기',
+    'source.clear': '소스 비우기',
+    'source.dropHint': 'WAV 또는 MP3 하나를 여기에 드롭하면 파형 영역에 표시됩니다.',
+    'source.none': '소스 없음',
+    'source.emptyBody': '로컬 오디오만 불러옵니다. 전체 파일 경로는 UI에 표시하지 않습니다.',
+    'source.status.empty': '소스 없음',
+    'source.status.reading': '파일 읽는 중',
+    'source.status.decoding': '오디오 해석 중',
+    'source.status.building': '파형 만드는 중',
+    'source.status.ready': '준비 완료',
+    'source.status.error': '불러오기 실패',
+    'metadata.file': '파일',
+    'metadata.format': '형식',
+    'metadata.size': '크기',
+    'metadata.duration': '길이',
+    'metadata.sampleRate': '샘플레이트',
+    'metadata.channels': '채널',
+    'analysis.disabled':
+      '분석용 mono 데이터는 준비하지만 FFT, onset, HPSS, slicing은 v0.2.0에서 실행하지 않습니다.',
+    'analysis.disabledLabel': '아직 설치되지 않음',
+    'loading.reading': '파일 읽는 중',
+    'loading.decoding': '오디오 해석 중',
+    'loading.building': '파형 만드는 중',
+    'pattern.disabledCode': 'v0.7.0 비활성',
+    'pattern.previewTitle': '패턴 엔진 - v0.7.0',
+    'pattern.previewBody': 'Sequencer, slice marker, pattern generation은 아직 구현하지 않습니다.',
+    'transport.play': '재생',
+    'transport.pause': '일시정지',
+    'transport.stop': '정지',
+    'transport.loop': 'Loop',
+    'transport.timeLabel': '재생 시간',
+    'transport.master': 'Master',
+    'transport.fit': '맞춤',
+    'transport.zoomOut': '축소',
+    'transport.zoomIn': '확대',
+    'transport.zoom': 'Zoom',
+    'transport.viewport': '보기 {start} - {end}',
+    'waveform.label': '오디오 파형',
+    'waveform.empty': '파형을 불러오면 여기에 표시됩니다.',
+    'drag.title': '로컬 WAV / MP3 드롭',
+    'drag.body': 'URL, 폴더, 여러 파일은 받지 않습니다.',
+    'dialog.close': '닫기',
+    'errors.UNSUPPORTED_EXTENSION':
+      '지원하지 않는 파일 형식입니다. WAV 또는 MP3 파일을 선택하세요.',
+    'errors.NOT_A_REGULAR_FILE': '폴더는 불러올 수 없습니다. 오디오 파일을 선택하세요.',
+    'errors.EMPTY_FILE': '빈 파일은 불러올 수 없습니다.',
+    'errors.FILE_TOO_LARGE': '파일 크기는 250MB를 넘을 수 없습니다.',
+    'errors.READ_FAILED': '오디오 파일을 읽지 못했습니다.',
+    'errors.MISSING_AUDIO_BYTES': '오디오 파일을 읽지 못했습니다.',
+    'errors.DECODE_FAILED': '오디오 파일을 해석하지 못했습니다. 파일이 손상되었을 수 있습니다.',
+    'errors.INVALID_DURATION': '오디오 길이가 올바르지 않습니다.',
+    'errors.AUDIO_TOO_LONG': '오디오 길이는 30분을 넘을 수 없습니다.',
+    'errors.NO_AUDIO_CHANNELS': '오디오 채널이 없습니다.',
+    'errors.MULTIPLE_FILES': '여러 파일은 한 번에 불러올 수 없습니다.',
+    'errors.UNKNOWN_IMPORT':
+      '오디오 파일을 불러오지 못했습니다. 다른 WAV 또는 MP3 파일을 선택하세요.',
+    'errorBoundary.title': 'Drumulizer 렌더러 오류',
+    'errorBoundary.body':
+      '인터페이스가 오디오 모듈을 건드리기 전에 중단되었습니다. 다시 불러오면 셸로 돌아갑니다.',
+    'errorBoundary.reload': '다시 불러오기',
+  },
+  en: {
+    'app.subtitle': 'Project: UNTITLED / Local audio workspace',
+    'app.workspace': 'Audio workspace',
+    'app.noSample': 'No sample loaded',
+    'app.analysisPending': 'Analysis module pending',
+    'app.patternEngine': 'Pattern engine - v0.7.0',
+    'app.errorTitle': 'Error',
+    'app.about': 'About',
+    'app.aboutTitle': 'About Drumulizer',
+    'app.aboutIntro':
+      'Drumulizer v{version} provides local WAV/MP3 import, waveform display, and basic playback.',
+    'app.aboutOffline':
+      'Network import, remote APIs, telemetry, CDNs, and remote assets are not used.',
+    'app.aboutShortcuts':
+      'Shortcuts: Space play/pause, Home to start, arrow keys seek, Shift+arrow seek farther, L loop.',
+    'app.aboutTypeface':
+      'Typeface: x10y12pxDenkiChipHangul, bundled locally under the SIL Open Font License.',
+    'app.repository': 'Repository: nowyoullnever/drumulizer',
+    'status.label': 'App status',
+    'status.ready': 'Ready',
+    'status.processing': 'Processing',
+    'status.error': 'Needs attention',
+    'language.label': 'Language',
+    'language.ko': 'Korean',
+    'language.en': 'English',
+    'panel.source': 'Source',
+    'panel.analysis': 'Analysis',
+    'panel.transport': 'Transport',
+    'section.waveform': 'Waveform workspace',
+    'section.pattern': 'Pattern workspace',
+    'section.empty': 'Empty',
+    'source.open': 'Open file',
+    'source.replace': 'Replace file',
+    'source.clear': 'Clear source',
+    'source.dropHint': 'Drop one WAV or MP3 here to show it in the waveform area.',
+    'source.none': 'No source',
+    'source.emptyBody':
+      'Only local audio is imported. Full file paths are not displayed in the UI.',
+    'source.status.empty': 'No source',
+    'source.status.reading': 'Reading file',
+    'source.status.decoding': 'Decoding audio',
+    'source.status.building': 'Building waveform',
+    'source.status.ready': 'Ready',
+    'source.status.error': 'Import failed',
+    'metadata.file': 'File',
+    'metadata.format': 'Format',
+    'metadata.size': 'Size',
+    'metadata.duration': 'Duration',
+    'metadata.sampleRate': 'Sample rate',
+    'metadata.channels': 'Channels',
+    'analysis.disabled':
+      'Analysis mono data is prepared, but FFT, onset, HPSS, and slicing do not run in v0.2.0.',
+    'analysis.disabledLabel': 'Not installed yet',
+    'loading.reading': 'Reading file',
+    'loading.decoding': 'Decoding audio',
+    'loading.building': 'Building waveform',
+    'pattern.disabledCode': 'v0.7.0 disabled',
+    'pattern.previewTitle': 'Pattern engine - v0.7.0',
+    'pattern.previewBody':
+      'Sequencer, slice marker, and pattern generation are not implemented yet.',
+    'transport.play': 'Play',
+    'transport.pause': 'Pause',
+    'transport.stop': 'Stop',
+    'transport.loop': 'Loop',
+    'transport.timeLabel': 'Playback time',
+    'transport.master': 'Master',
+    'transport.fit': 'Fit',
+    'transport.zoomOut': 'Zoom out',
+    'transport.zoomIn': 'Zoom in',
+    'transport.zoom': 'Zoom',
+    'transport.viewport': 'View {start} - {end}',
+    'waveform.label': 'Audio waveform',
+    'waveform.empty': 'Waveform appears here after import.',
+    'drag.title': 'Drop local WAV / MP3',
+    'drag.body': 'URLs, folders, and multiple files are not accepted.',
+    'dialog.close': 'Close',
+    'errors.UNSUPPORTED_EXTENSION': 'Unsupported file type. Choose a WAV or MP3 file.',
+    'errors.NOT_A_REGULAR_FILE': 'Folders cannot be imported. Choose an audio file.',
+    'errors.EMPTY_FILE': 'Empty files cannot be imported.',
+    'errors.FILE_TOO_LARGE': 'File size cannot exceed 250MB.',
+    'errors.READ_FAILED': 'Could not read the audio file.',
+    'errors.MISSING_AUDIO_BYTES': 'Could not read the audio file.',
+    'errors.DECODE_FAILED': 'Could not decode the audio file. It may be damaged.',
+    'errors.INVALID_DURATION': 'Audio duration is invalid.',
+    'errors.AUDIO_TOO_LONG': 'Audio duration cannot exceed 30 minutes.',
+    'errors.NO_AUDIO_CHANNELS': 'The audio file has no channels.',
+    'errors.MULTIPLE_FILES': 'Multiple files cannot be imported at once.',
+    'errors.UNKNOWN_IMPORT': 'Could not import the audio file. Choose another WAV or MP3 file.',
+    'errorBoundary.title': 'Drumulizer renderer error',
+    'errorBoundary.body':
+      'The interface stopped before audio modules were touched. Reload to return to the shell.',
+    'errorBoundary.reload': 'Reload',
+  },
+} as const;
+
+export type TranslationKey = keyof (typeof translations)[typeof defaultLocale];
+
+export type TranslationValues = Record<string, string | number>;
+
+export const isLocale = (value: string | null | undefined): value is Locale =>
+  Boolean(value && locales.includes(value as Locale));
+
+export const formatTranslation = (message: string, values?: TranslationValues): string =>
+  values
+    ? Object.entries(values).reduce(
+        (formatted, [key, value]) => formatted.replaceAll(`{${key}}`, String(value)),
+        message,
+      )
+    : message;
+
+export const translate = (
+  locale: Locale,
+  key: TranslationKey,
+  values?: TranslationValues,
+): string => formatTranslation(translations[locale][key] ?? key, values);

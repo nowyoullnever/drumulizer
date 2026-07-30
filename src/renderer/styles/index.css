@@ -37,14 +37,13 @@ input {
 .app {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr;
   gap: var(--space-3);
   padding: var(--space-4);
 }
 
 .identity-strip,
-.project-status,
-.bottom-strip {
+.project-status {
   border: var(--border-standard) solid var(--border-primary);
   background: var(--surface-raised);
 }
@@ -70,13 +69,72 @@ input {
   color: var(--text-muted);
 }
 
-.identity-strip__status,
-.bottom-strip,
+.identity-strip__controls,
 .project-status {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
+}
+
+.identity-strip__controls {
+  justify-content: flex-end;
+}
+
+.app-status-module {
+  display: grid;
+  gap: 2px;
+  min-width: 128px;
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+  padding: var(--space-2);
+}
+
+.app-status-module span {
+  color: var(--text-muted);
+}
+
+.app-status-module--ready strong {
+  color: var(--color-success);
+}
+
+.app-status-module--processing strong {
+  color: var(--color-cobalt);
+}
+
+.app-status-module--error strong {
+  color: var(--color-danger);
+}
+
+.language-switch {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  border: var(--border-standard) solid var(--border-primary);
+}
+
+.language-switch__option {
+  display: grid;
+  place-items: center;
+  min-width: 78px;
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.language-switch__option + .language-switch__option {
+  border-left: var(--border-standard) solid var(--border-primary);
+}
+
+.language-switch input {
+  position: absolute;
+  opacity: 0;
+}
+
+.language-switch__option:has(input:checked) {
+  background: var(--control-active);
+  color: var(--color-paper-light);
 }
 
 .project-status {
@@ -361,6 +419,28 @@ input:disabled {
   color: var(--control-disabled);
 }
 
+.source-panel__import-stage {
+  min-height: 28px;
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-muted);
+}
+
+.source-panel__import-stage--ready {
+  color: var(--color-success);
+}
+
+.source-panel__import-stage--reading,
+.source-panel__import-stage--decoding,
+.source-panel__import-stage--building-waveform {
+  color: var(--color-cobalt);
+}
+
+.source-panel__import-stage--error {
+  color: var(--color-danger);
+}
+
 .error-banner {
   display: grid;
   gap: var(--space-1);
@@ -424,6 +504,10 @@ input:disabled {
 .swatches {
   display: grid;
   gap: var(--space-2);
+}
+
+.muted-label {
+  color: var(--text-muted);
 }
 
 .source-panel {
@@ -559,10 +643,6 @@ input:disabled {
   display: block;
   padding: var(--space-2);
   border: var(--border-standard) solid var(--border-primary);
-}
-
-.bottom-strip {
-  justify-content: space-between;
 }
 
 .app--error {

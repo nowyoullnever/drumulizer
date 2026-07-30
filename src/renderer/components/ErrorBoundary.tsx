@@ -1,8 +1,10 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { translate, type Locale } from '../i18n/translations';
 import { PixelButton } from './PixelButton';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
+  locale?: Locale;
 }
 
 interface ErrorBoundaryState {
@@ -24,16 +26,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render(): ReactNode {
     if (this.state.hasError) {
+      const locale = this.props.locale ?? 'ko';
       return (
         <main className="app app--error">
           <section className="error-screen pattern pattern--checker">
-            <h1>DRUMULIZER RENDERER ERROR</h1>
-            <p>
-              The interface stopped before audio modules were touched. Reload to return to the
-              shell.
-            </p>
+            <h1>{translate(locale, 'errorBoundary.title')}</h1>
+            <p>{translate(locale, 'errorBoundary.body')}</p>
             <PixelButton onClick={() => window.location.reload()} tone="danger">
-              RELOAD
+              {translate(locale, 'errorBoundary.reload')}
             </PixelButton>
           </section>
         </main>

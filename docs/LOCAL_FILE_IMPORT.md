@@ -27,4 +27,4 @@ Drumulizer displays the base file name, format, size, duration, sample rate, and
 
 ## Failure Handling
 
-Unsupported extensions, empty files, directories, corrupted audio, decode failures, excessive size, excessive duration, invalid channels, and invalid duration are shown as Korean user-readable errors. Canceling the dialog is not an error.
+Unsupported extensions, empty files, directories, corrupted audio, decode failures, excessive size, excessive duration, invalid channels, and invalid duration are returned or thrown as stable error codes. The renderer maps those codes through the current locale dictionary, so the same failure can be shown in Korean or English. Canceling the dialog is not an error.

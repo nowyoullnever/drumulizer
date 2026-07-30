@@ -10,9 +10,9 @@ describe('audio file validation', () => {
     expect(validateAudioFileInput({ canceled: false, fileName: 'beat.mp3', bytes })).toBeNull();
   });
 
-  it('rejects unsupported, too large, and empty files', () => {
-    expect(validateAudioFileInput({ canceled: false, fileName: 'note.txt', bytes })).toContain(
-      '지원하지 않는',
+  it('returns stable error codes for invalid files', () => {
+    expect(validateAudioFileInput({ canceled: false, fileName: 'note.txt', bytes })).toBe(
+      'UNSUPPORTED_EXTENSION',
     );
     expect(
       validateAudioFileInput({
@@ -21,8 +21,8 @@ describe('audio file validation', () => {
         fileSizeBytes: MAX_AUDIO_FILE_BYTES + 1,
         bytes,
       }),
-    ).toContain('250MB');
-    expect(validateAudioFileInput({ canceled: false, fileName: 'empty.wav' })).toContain('빈 파일');
+    ).toBe('FILE_TOO_LARGE');
+    expect(validateAudioFileInput({ canceled: false, fileName: 'empty.wav' })).toBe('EMPTY_FILE');
   });
 
   it('treats dialog cancel as non-error', () => {

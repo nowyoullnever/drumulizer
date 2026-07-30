@@ -6,6 +6,8 @@ The built Drumulizer application must run without internet access and must not i
 
 Production blocks outgoing HTTP and HTTPS requests from the Electron session. The app does not use remote APIs, cloud AI, telemetry, analytics, crash-reporting services, CDNs, online font loading, remote images, remote stylesheets, automatic updates, remote configuration, feature flags, online authentication, or remote license checks. There is no remote URL import field, browser component, network client, or remote media loader.
 
+The UI does not need persistent offline-mode badges to satisfy this rule. Offline behavior is enforced by architecture and security policy, while user-facing status is limited to the current app state.
+
 ## Development
 
 Development allows only the local Vite server on loopback hosts such as `localhost` and `127.0.0.1`. Arbitrary development network access is not allowed.
@@ -26,3 +28,4 @@ Audio tools must stay available, private, deterministic, and usable when disconn
 - Confirm HTTP and HTTPS requests are blocked.
 - Confirm fonts, CSS, images, and scripts load locally.
 - Confirm no telemetry or updater package is present.
+- Confirm the primary UI has no URL import affordance, offline/network mode control, or remote media loader.

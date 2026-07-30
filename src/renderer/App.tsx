@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { APP_VERSION } from '../shared/version';
 import type { AppStatus, DrumulizerAppInfo, LocalAudioFileResult } from '../shared/types/app';
 import { audioRuntimeStore } from './audio/runtimeStore';
-import { decodeImportedAudio } from './audio/importAudio';
+import { AudioImportError, decodeImportedAudio } from './audio/importAudio';
 import { PlaybackEngine } from './audio/playbackEngine';
 import { buildWaveformPeaksInWorker } from './audio/peakWorkerClient';
 import type {
@@ -12,7 +12,9 @@ import type {
   WaveformPeaks,
 } from './audio/types';
 import { clamp } from './audio/time';
+import { AppStatusModule } from './components/AppStatusModule';
 import { ErrorBanner } from './components/ErrorBanner';
+import { LanguageSwitch } from './components/LanguageSwitch';
 import { PatternBackground } from './components/PatternBackground';
 import { PixelButton } from './components/PixelButton';
 import { PixelDialog } from './components/PixelDialog';
@@ -20,9 +22,10 @@ import { PixelPanel } from './components/PixelPanel';
 import { PixelSectionHeader } from './components/PixelSectionHeader';
 import { PixelTabs } from './components/PixelTabs';
 import { SourcePanel } from './components/SourcePanel';
-import { StatusBadge } from './components/StatusBadge';
 import { TransportControls } from './components/TransportControls';
 import { WaveformCanvas } from './components/WaveformCanvas';
+import { errorKeyForCode, type UserFacingErrorCode } from './i18n/errorMessages';
+import { useI18n } from './i18n/useI18n';
 
 const fallbackInfo: DrumulizerAppInfo = {
   name: 'Drumulizer',
@@ -63,6 +66,7 @@ const selectFileInRendererPreview = (): Promise<LocalAudioFileResult> =>
 const initialPlayback = (): PlaybackSnapshot => playbackEngine.snapshot();
 
 export function App() {
+  const { t } = useI18n();
   const [aboutOpen, setAboutOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState('LOW');
   const [status, setStatus] = useState<AppStatus>('ready');
@@ -82,6 +86,21 @@ export function App() {
   const viewportDuration = duration > 0 ? duration / zoom : 1;
   const viewportEnd = Math.min(duration, viewportStart + viewportDuration);
 
+  const errorMessageForCode = useCallback(
+    (code: UserFacingErrorCode) => t(errorKeyForCode(code)),
+    [t],
+  );
+
+  const applyImportError = useCallback(
+    (code: UserFacingErrorCode) => {
+      const message = errorMessageForCode(code);
+      setErrorMessage(message);
+      setImportState({ status: 'error', message });
+      setStatus('error');
+    },
+    [errorMessageForCode],
+  );
+
   const resetViewport = useCallback((newDuration: number) => {
     setZoom(1);
     setViewportStart(0);
@@ -89,11 +108,11 @@ export function App() {
   }, []);
 
   const importAudio = useCallback(
-    async (resultPromise: Promise<LocalAudioFileResult>, label = '선택한 파일') => {
+    async (resultPromise: Promise<LocalAudioFileResult>, label = t('source.open')) => {
       const generation = importGeneration.current + 1;
       importGeneration.current = generation;
       setErrorMessage(null);
-      setStatus('busy');
+      setStatus('processing');
       setImportState({ status: 'reading', fileName: label });
 
       const result = await resultPromise;
@@ -103,10 +122,8 @@ export function App() {
         setStatus('ready');
         return;
       }
-      if (result.errorMessage) {
-        setErrorMessage(result.errorMessage);
-        setImportState({ status: 'error', message: result.errorMessage });
-        setStatus('error');
+      if (result.errorCode) {
+        applyImportError(result.errorCode);
         return;
       }
 
@@ -128,27 +145,21 @@ export function App() {
         setImportState({ status: 'ready', sourceId: decoded.metadata.id });
         setStatus('ready');
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : '오디오 파일을 불러오지 못했습니다. 다른 WAV 또는 MP3 파일을 선택하세요.';
-        setErrorMessage(message);
-        setImportState({ status: 'error', message });
-        setStatus('error');
+        applyImportError(error instanceof AudioImportError ? error.code : 'UNKNOWN_IMPORT');
       }
     },
-    [metadata, resetViewport],
+    [applyImportError, metadata, resetViewport, t],
   );
 
   const openFile = useCallback(() => {
     if (window.drumulizer) {
-      void importAudio(window.drumulizer.selectLocalAudioFile(), '선택한 파일');
+      void importAudio(window.drumulizer.selectLocalAudioFile(), t('source.open'));
       return;
     }
     if (import.meta.env.DEV) {
-      void importAudio(selectFileInRendererPreview(), '선택한 파일');
+      void importAudio(selectFileInRendererPreview(), t('source.open'));
     }
-  }, [importAudio]);
+  }, [importAudio, t]);
 
   const clearSource = useCallback(() => {
     importGeneration.current += 1;
@@ -228,36 +239,27 @@ export function App() {
   }, [metadata, playback.loopEnabled, playback.positionSeconds, playback.status]);
 
   const handleDrop = useCallback(
-    (event: React.DragEvent) => {
+    (event: DragEvent) => {
       event.preventDefault();
       setDragActive(false);
       const files = Array.from(event.dataTransfer.files);
       if (files.length !== 1) {
-        const message = '여러 파일은 한 번에 불러올 수 없습니다.';
-        setErrorMessage(message);
-        setImportState({ status: 'error', message });
-        setStatus('error');
+        applyImportError('MULTIPLE_FILES');
         return;
       }
       const [file] = files;
       if (!file || file.size === 0) {
-        const message = '빈 파일은 불러올 수 없습니다.';
-        setErrorMessage(message);
-        setImportState({ status: 'error', message });
-        setStatus('error');
+        applyImportError('EMPTY_FILE');
         return;
       }
       const extension = file.name.split('.').pop()?.toLowerCase();
       if (extension !== 'wav' && extension !== 'mp3') {
-        const message = '지원하지 않는 파일 형식입니다. WAV 또는 MP3 파일을 선택하세요.';
-        setErrorMessage(message);
-        setImportState({ status: 'error', message });
-        setStatus('error');
+        applyImportError('UNSUPPORTED_EXTENSION');
         return;
       }
       void importAudio(makeDroppedAudioResult(file), file.name);
     },
-    [importAudio],
+    [applyImportError, importAudio],
   );
 
   const isBusy = ['reading', 'decoding', 'building-waveform'].includes(importState.status);
@@ -278,27 +280,27 @@ export function App() {
         <PatternBackground preset="checker" className="identity-strip__mark" />
         <div>
           <h1>DRUMULIZER / v{appInfo.version}</h1>
-          <p>프로젝트: UNTITLED / LOCAL AUDIO WORKSPACE</p>
+          <p>{t('app.subtitle')}</p>
         </div>
-        <div className="identity-strip__status">
-          <StatusBadge status="offline" label="LOCAL ONLY" />
-          <StatusBadge status={status} label={status === 'busy' ? 'LOADING' : 'READY'} />
-          <PixelButton onClick={() => setAboutOpen(true)}>ABOUT</PixelButton>
+        <div className="identity-strip__controls">
+          <AppStatusModule status={status} />
+          <LanguageSwitch />
+          <PixelButton onClick={() => setAboutOpen(true)}>{t('app.about')}</PixelButton>
         </div>
       </header>
 
       <section className="project-status">
-        <strong>AUDIO WORKSPACE</strong>
-        <span>{metadata ? metadata.fileName : 'NO SAMPLE LOADED'}</span>
-        <span>ANALYSIS MODULE NOT INSTALLED</span>
-        <span>PATTERN ENGINE - v0.7.0</span>
+        <strong>{t('app.workspace')}</strong>
+        <span>{metadata ? metadata.fileName : t('app.noSample')}</span>
+        <span>{t('app.analysisPending')}</span>
+        <span>{t('app.patternEngine')}</span>
       </section>
 
-      {errorMessage ? <ErrorBanner title="오류" message={errorMessage} /> : null}
+      {errorMessage ? <ErrorBanner title={t('app.errorTitle')} message={errorMessage} /> : null}
 
       <div className="workspace-grid workspace-grid--audio">
         <aside className="left-rail">
-          <PixelPanel title="SOURCE" accent="tomato">
+          <PixelPanel title={t('panel.source')} accent="tomato">
             <SourcePanel
               metadata={metadata}
               importState={importState}
@@ -308,31 +310,28 @@ export function App() {
             />
           </PixelPanel>
 
-          <PixelPanel title="ANALYSIS" accent="mustard">
+          <PixelPanel title={t('panel.analysis')} accent="mustard">
             <div className="status-stack">
-              <StatusBadge status="disabled" label="NOT INSTALLED" />
-              <p>
-                분석용 mono 데이터는 준비하지만 FFT, onset, HPSS, slicing은 v0.2.0에서 실행하지
-                않습니다.
-              </p>
+              <strong className="muted-label">{t('analysis.disabledLabel')}</strong>
+              <p>{t('analysis.disabled')}</p>
             </div>
           </PixelPanel>
         </aside>
 
         <section className="main-workspace">
           <PixelSectionHeader
-            label="WAVEFORM WORKSPACE"
-            code={metadata ? metadata.channelLabel : 'EMPTY'}
+            label={t('section.waveform')}
+            code={metadata ? metadata.channelLabel : t('section.empty')}
           />
           <div className="waveform-shell">
             {isBusy ? (
               <div className="loading-strip" role="status">
                 <span>
                   {importState.status === 'decoding'
-                    ? '오디오 해석 중'
+                    ? t('loading.decoding')
                     : importState.status === 'building-waveform'
-                      ? '파형 만드는 중'
-                      : '파일 읽는 중'}
+                      ? t('loading.building')
+                      : t('loading.reading')}
                 </span>
                 <div className="loading-strip__bar" />
               </div>
@@ -348,7 +347,7 @@ export function App() {
             />
           </div>
 
-          <PixelSectionHeader label="PATTERN WORKSPACE" code="v0.7.0 DISABLED" />
+          <PixelSectionHeader label={t('section.pattern')} code={t('pattern.disabledCode')} />
           <div className="pattern-workspace pattern-workspace--disabled">
             <PixelTabs
               tabs={['LOW', 'MID', 'HIGH', 'TEXTURE']}
@@ -356,14 +355,14 @@ export function App() {
               onSelect={setSelectedTab}
             />
             <div className={`lane-preview lane-preview--${selectedTab.toLowerCase()}`}>
-              <strong>PATTERN ENGINE - v0.7.0</strong>
-              <span>Sequencer, slice marker, pattern generation은 아직 구현되지 않았습니다.</span>
+              <strong>{t('pattern.previewTitle')}</strong>
+              <span>{t('pattern.previewBody')}</span>
             </div>
           </div>
         </section>
 
         <aside className="control-rail">
-          <PixelPanel title="TRANSPORT" accent="teal">
+          <PixelPanel title={t('panel.transport')} accent="teal">
             <TransportControls
               playback={playback}
               hasSource={Boolean(metadata)}
@@ -389,28 +388,22 @@ export function App() {
 
       {dragActive ? (
         <div className="drag-overlay" aria-hidden="true">
-          <strong>로컬 WAV / MP3 놓기</strong>
-          <span>URL, 폴더, 여러 파일은 받지 않습니다.</span>
+          <strong>{t('drag.title')}</strong>
+          <span>{t('drag.body')}</span>
         </div>
       ) : null}
 
-      <footer className="bottom-strip">
-        <StatusBadge status="offline" label="LOCAL ONLY" />
-        <span>CPU --</span>
-        <span>VOICES --</span>
-        <span>CACHE --</span>
-        <span>STATUS {status.toUpperCase()}</span>
-        <strong>Drumulizer v{appInfo.version}</strong>
-      </footer>
-
-      <PixelDialog open={aboutOpen} title="ABOUT DRUMULIZER" onClose={() => setAboutOpen(false)}>
-        <p>
-          Drumulizer v{appInfo.version}는 로컬 WAV/MP3 import, 파형 표시, 기본 재생을 제공합니다.
-        </p>
-        <p>네트워크 import, 원격 API, telemetry, CDN, remote asset은 없습니다.</p>
-        <p>단축키: Space 재생/일시정지, Home 처음으로, ←/→ 짧은 이동, Shift+←/→ 긴 이동, L loop.</p>
-        <p>Typeface: x10y12pxDenkiChipHangul, bundled locally under the SIL Open Font License.</p>
-        <p>Repository: nowyoullnever/drumulizer</p>
+      <PixelDialog
+        open={aboutOpen}
+        title={t('app.aboutTitle')}
+        closeLabel={t('dialog.close')}
+        onClose={() => setAboutOpen(false)}
+      >
+        <p>{t('app.aboutIntro', { version: appInfo.version })}</p>
+        <p>{t('app.aboutOffline')}</p>
+        <p>{t('app.aboutShortcuts')}</p>
+        <p>{t('app.aboutTypeface')}</p>
+        <p>{t('app.repository')}</p>
       </PixelDialog>
     </main>
   );

@@ -1,5 +1,9 @@
 import { MAX_AUDIO_DURATION_SECONDS } from '../../shared/constants/audio';
-import type { LocalAudioFileResult, SupportedAudioExtension } from '../../shared/types/app';
+import type {
+  LocalAudioFileErrorCode,
+  LocalAudioFileResult,
+  SupportedAudioExtension,
+} from '../../shared/types/app';
 import { createAnalysisMonoData } from './mixdown';
 import type { ImportedAudioRuntime } from './types';
 import { extensionFromFileName, validateAudioFileInput } from './validation';
@@ -11,6 +15,24 @@ export const getAudioContext = (): AudioContext => {
   return audioContext;
 };
 
+export type AudioImportErrorCode =
+  | LocalAudioFileErrorCode
+  | 'MISSING_AUDIO_BYTES'
+  | 'DECODE_FAILED'
+  | 'INVALID_DURATION'
+  | 'AUDIO_TOO_LONG'
+  | 'NO_AUDIO_CHANNELS';
+
+export class AudioImportError extends Error {
+  code: AudioImportErrorCode;
+
+  constructor(code: AudioImportErrorCode) {
+    super(code);
+    this.name = 'AudioImportError';
+    this.code = code;
+  }
+}
+
 const channelLabel = (count: number): string => {
   if (count === 1) return 'MONO';
   if (count === 2) return 'STEREO';
@@ -20,12 +42,12 @@ const channelLabel = (count: number): string => {
 export const decodeImportedAudio = async (
   input: LocalAudioFileResult,
 ): Promise<ImportedAudioRuntime> => {
-  const validationMessage = validateAudioFileInput(input);
-  if (validationMessage) throw new Error(validationMessage);
-  if (!input.bytes || !input.fileName) throw new Error('오디오 파일을 읽지 못했습니다.');
+  const validationError = validateAudioFileInput(input);
+  if (validationError) throw new AudioImportError(validationError);
+  if (!input.bytes || !input.fileName) throw new AudioImportError('MISSING_AUDIO_BYTES');
 
   const extension = input.extension ?? extensionFromFileName(input.fileName);
-  if (!extension) throw new Error('지원하지 않는 파일 형식입니다. WAV 또는 MP3 파일을 선택하세요.');
+  if (!extension) throw new AudioImportError('UNSUPPORTED_EXTENSION');
 
   const context = getAudioContext();
   if (context.state === 'suspended') {
@@ -36,17 +58,17 @@ export const decodeImportedAudio = async (
   try {
     decoded = await context.decodeAudioData(input.bytes.slice(0));
   } catch {
-    throw new Error('오디오 파일을 해석하지 못했습니다. 파일이 손상되었을 수 있습니다.');
+    throw new AudioImportError('DECODE_FAILED');
   }
 
   if (!Number.isFinite(decoded.duration) || decoded.duration <= 0) {
-    throw new Error('오디오 길이가 올바르지 않습니다.');
+    throw new AudioImportError('INVALID_DURATION');
   }
   if (decoded.duration > MAX_AUDIO_DURATION_SECONDS) {
-    throw new Error('오디오 길이는 30분을 넘을 수 없습니다.');
+    throw new AudioImportError('AUDIO_TOO_LONG');
   }
   if (decoded.numberOfChannels <= 0) {
-    throw new Error('오디오 채널이 없습니다.');
+    throw new AudioImportError('NO_AUDIO_CHANNELS');
   }
 
   const analysisMonoData = createAnalysisMonoData(decoded);

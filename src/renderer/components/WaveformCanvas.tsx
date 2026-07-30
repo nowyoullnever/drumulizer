@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { PlaybackSnapshot, WaveformPeaks } from '../audio/types';
 import { clamp } from '../audio/time';
+import { useI18n } from '../i18n/useI18n';
 
 interface WaveformCanvasProps {
   peaks: WaveformPeaks | null;
@@ -21,6 +22,7 @@ export function WaveformCanvas({
   onPan,
   onWheelZoom,
 }: WaveformCanvasProps) {
+  const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ x: number; start: number } | null>(null);
 
@@ -58,7 +60,7 @@ export function WaveformCanvas({
 
     if (!peaks) {
       ctx.fillStyle = '#56463b';
-      ctx.fillText('파형을 불러오면 여기에 표시됩니다.', 24, rect.height / 2);
+      ctx.fillText(t('waveform.empty'), 24, rect.height / 2);
       return;
     }
 
@@ -108,7 +110,7 @@ export function WaveformCanvas({
       ctx.fillStyle = '#27867b';
       ctx.fillRect(playheadX - 2, 0, 4, rect.height);
     }
-  }, [peaks, playback.positionSeconds, viewportDuration, viewportStart]);
+  }, [peaks, playback.positionSeconds, t, viewportDuration, viewportStart]);
 
   const timeFromClientX = (clientX: number): number => {
     const canvas = canvasRef.current;
@@ -122,7 +124,7 @@ export function WaveformCanvas({
     <canvas
       ref={canvasRef}
       className="waveform-canvas"
-      aria-label="오디오 파형"
+      aria-label={t('waveform.label')}
       role="img"
       onClick={(event) => {
         if (!peaks || dragRef.current) return;
