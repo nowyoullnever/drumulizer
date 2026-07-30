@@ -1,10 +1,10 @@
 # Offline Requirements
 
-The built Drumulizer application must run without internet access and must not attempt runtime network requests.
+The built Drumulizer application must run without internet access and must not include networking features. v0.2.0 imports audio only from user-selected local WAV or MP3 files.
 
 ## Production
 
-Production blocks outgoing HTTP and HTTPS requests from the Electron session. The app does not use remote APIs, cloud AI, telemetry, analytics, crash-reporting services, CDNs, online font loading, remote images, remote stylesheets, automatic updates, remote configuration, feature flags, online authentication, or remote license checks.
+Production blocks outgoing HTTP and HTTPS requests from the Electron session. The app does not use remote APIs, cloud AI, telemetry, analytics, crash-reporting services, CDNs, online font loading, remote images, remote stylesheets, automatic updates, remote configuration, feature flags, online authentication, or remote license checks. There is no remote URL import field, browser component, network client, or remote media loader.
 
 ## Development
 

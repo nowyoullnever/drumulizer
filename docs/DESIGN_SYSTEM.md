@@ -1,6 +1,6 @@
 # Design System
 
-Drumulizer combines 1970s avant-garde fashion graphics, saturated but faded print color, geometric textile references, modular hardware structure, and pixel-interface construction.
+Drumulizer combines 1970s avant-garde fashion graphics, saturated but faded print color, geometric textile references, modular hardware structure, and pixel-interface construction. v0.2.0 adds a functional audio workspace while preserving this identity.
 
 ## Palette
 
@@ -26,7 +26,7 @@ Controls use integer dimensions and clear pressed states.
 
 ## Patterns
 
-Reusable presets: checker, diagonal stripe, halftone dot, stepped block, and wide horizontal band. Patterns are reserved for identity strips, placeholders, section labels, modal headers, and swatches. Dense patterns must not sit behind small text, future waveforms, sequencer steps, numeric controls, or error messages.
+Reusable presets: checker, diagonal stripe, halftone dot, stepped block, and wide horizontal band. Patterns are reserved for identity strips, placeholders, section labels, modal headers, and swatches. Dense patterns must not sit behind small text, waveforms, sequencer steps, numeric controls, or error messages. The waveform canvas uses a quieter paper-toned surface without textile patterning behind audio data.
 
 ## Component States
 
