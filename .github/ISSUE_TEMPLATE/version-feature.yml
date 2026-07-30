@@ -1,0 +1,52 @@
+name: Version feature
+description: Track a planned version milestone.
+title: '[vX.Y.Z] '
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of Scope
+  - type: textarea
+    id: design-changes
+    attributes:
+      label: Design Changes
+  - type: textarea
+    id: technical-approach
+    attributes:
+      label: Technical Approach
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+  - type: textarea
+    id: tests-performed
+    attributes:
+      label: Tests Performed
+  - type: textarea
+    id: files-changed
+    attributes:
+      label: Files Changed
+  - type: textarea
+    id: known-issues
+    attributes:
+      label: Known Issues
+  - type: textarea
+    id: version-summary
+    attributes:
+      label: Version Summary
+  - type: input
+    id: final-commit
+    attributes:
+      label: Final Commit
