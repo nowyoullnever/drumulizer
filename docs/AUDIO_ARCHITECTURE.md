@@ -6,6 +6,10 @@ Drumulizer v0.4.0 uses the Web Audio API and local renderer workers. No network 
 
 Slice analysis uses the same local analysis-only mono PCM created during import. The renderer sends committed `SliceRegion[]` and a slice-set signature to `sliceAnalysis.worker.ts`; onset preview candidates are not analyzed. Results return to the renderer as raw features, normalized features, micro-role scores, lane scores, automatic role, confidence, warnings, and recommendations.
 
+## v0.6.0 Manual Sequencer
+
+The sequencer stores a lightweight pattern model in renderer state. A pattern is fixed 4/4, uses sixteenth-note steps, supports 1-4 bars, and has LOW/MID/HIGH/TEXTURE lanes. Events reference existing `SliceRegion.id` values and carry velocity, pan, and pitch offsets. Pattern edits stay undoable in a dedicated history stack and are reconciled whenever slice boundaries or source identity change.
+
 ## AudioContext Lifecycle
 
 The renderer lazily creates one shared `AudioContext` after a user gesture. The context is resumed before decoding, full-file playback, slice audition, or candidate audition if it is suspended.
@@ -50,6 +54,22 @@ Slice audition starts from the selected slice start, optionally minus clamped pr
 
 Starting full-file playback stops audition. Starting slice audition or candidate audition stops full-file playback and any previous audition. Repeated audition requests replace the active audition node rather than overlapping.
 
+## Sequencer Graph
+
+```text
+AudioBufferSourceNode
+        |
+Event GainNode
+        |
+StereoPannerNode
+        |
+AudioContext.destination
+```
+
+Each sequencer event schedules a fresh source node against `AudioContext.currentTime`. Event velocity, lane gain, and master gain are combined into the event gain plan; pan uses `StereoPannerNode` when available; pitch uses source playback rate. Short gain fades are automated per event to avoid clicks at slice boundaries.
+
+The scheduler uses a deterministic look-ahead window. JavaScript timers only ask the engine to schedule the next window; actual event starts are Web Audio times. Scheduled event keys include loop index and event id so loop boundaries do not double-schedule. The engine caps active voices and stops all voices on pause, stop, source replacement, or source clear.
+
 ## Onset Analysis Worker
 
 Onset analysis runs in a bundled local Web Worker. Requests carry a generation id and settings key; stale worker results, stale progress, and stale errors are ignored if a newer analysis, source replacement, source clear, or settings change occurred. Worker cancellation and unmount cleanup terminate the active worker client safely.
@@ -62,7 +82,7 @@ Playback position is derived from `AudioContext.currentTime`, source start conte
 
 ## Loop Behavior
 
-Loop mode uses the source node loop flag for full-file looping. Loop does not create slice markers or sequencer behavior.
+Full-file loop mode uses the source node loop flag. Pattern loop mode belongs to the sequencer and wraps the scheduler position at the pattern duration. Neither loop mode creates slice markers or automatic patterns.
 
 ## Cleanup
 

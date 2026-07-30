@@ -1,8 +1,8 @@
 # Drumulizer
 
-Drumulizer is a Windows desktop application for building a fully local, sample-based IDM drum-loop workflow. Version `0.5.0` adds committed-slice analysis, role scoring, role override/exclusion controls, a functional Slice Library, and role-aware Slice Map visuals on top of local WAV/MP3 import, waveform playback, manual slice editing, equal division, slice audition, and offline onset preview.
+Drumulizer is a Windows desktop application for building a fully local, sample-based IDM drum-loop workflow. Version `0.6.0` adds a four-lane manual sequencer, slice-to-step placement, event velocity/pan/pitch controls, lane mute/solo/volume controls, and deterministic Web Audio look-ahead scheduling on top of local WAV/MP3 import, waveform playback, manual slice editing, offline onset preview, committed-slice analysis, and the Slice Library.
 
-Current status: local audio slice workspace with manual editing and offline onset assistance. It does not use AI, machine learning, drum classification, BPM detection, sequencing, pattern generation, project saving, or audio export.
+Current status: local audio slice workspace with manual editing, offline onset assistance, slice analysis, Slice Library curation, and manual pattern playback. It does not use AI, machine learning, automatic drum classification, BPM detection, automatic pattern generation, project saving, MIDI, or audio export.
 
 ## Offline Principle
 
@@ -34,6 +34,7 @@ npm run dev
 - `npm run test:run`: run Vitest once for CI.
 - `npm run test:onset`: run focused onset-analysis tests.
 - `npm run verify:onset`: run typecheck and focused onset-analysis tests.
+- `npm run test:sequencer`: run focused sequencer model, scheduling, and UI tests.
 - `npm run build`: build production main, preload, and renderer assets.
 - `npm run dist:win`: create Windows distributables with electron-builder.
 
@@ -71,10 +72,12 @@ The v0.4.0 detector runs locally in a renderer worker. It uses deterministic mul
 
 The v0.5.0 slice analyzer runs locally in a renderer worker against committed `SliceRegion[]`. It computes raw DSP features, robust per-source normalization, micro-role scores, independent low/mid/high/texture lane scores, automatic primary role, confidence, warnings, and generation recommendations. The Slice Library can filter, sort, inspect, override, and exclude slices without changing marker boundaries.
 
+The v0.6.0 sequencer is manual only. Users choose an active slice from the Slice Library or slice editor, place events on LOW/MID/HIGH/TEXTURE lanes, edit per-event velocity, pan, and pitch, and play the pattern with a Web Audio look-ahead scheduler. Patterns are fixed 4/4 sixteenth-note grids from 1 to 4 bars at 40-240 BPM. The sequencer does not generate rhythms automatically and does not detect tempo.
+
 Preview candidates can be selected on the waveform, navigated with Previous/Next buttons or `,` and `.` shortcuts, and auditioned with a short 20ms pre-roll and 120ms post window. Candidate confidence, dominant band, and supporting feature count are shown as diagnostics, not as instrument labels.
 
 Replace mode substitutes editable internal markers with detected markers. Merge mode preserves existing valid manual, equal-division, and detected markers while skipping candidates that conflict with slice-duration rules. Each apply operation creates one undoable history entry.
 
 ## Planned Direction
 
-Future versions will add slice role scoring, HPSS-derived slices, sequencing, IDM pattern generation, granular processing, project saves, and WAV/stem export.
+Future versions will add HPSS-derived slices, IDM pattern generation, granular processing, project saves, and WAV/stem export.
