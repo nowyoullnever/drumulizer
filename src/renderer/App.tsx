@@ -6,6 +6,16 @@ import { AudioImportError, decodeImportedAudio } from './audio/importAudio';
 import { PlaybackEngine } from './audio/playbackEngine';
 import { buildWaveformPeaksInWorker } from './audio/peakWorkerClient';
 import { OnsetWorkerClient } from './audio/onset/onsetWorkerClient';
+import { sliceSetSignature } from './audio/sliceAnalysis/analyzeSlices';
+import { calculateEffectiveRole } from './audio/sliceAnalysis/roleScoring';
+import { SliceAnalysisWorkerClient } from './audio/sliceAnalysis/sliceAnalysisWorkerClient';
+import type {
+  SliceAnalysisLifecycle,
+  SliceAnalysisResult,
+  SliceAnnotationState,
+  SliceLibraryFilter,
+  SliceLibrarySort,
+} from './audio/sliceAnalysis/sliceAnalysisTypes';
 import {
   DEFAULT_ONSET_MINIMUM_GAP_MS,
   DEFAULT_ONSET_SENSITIVITY,
@@ -32,8 +42,8 @@ import { PixelButton } from './components/PixelButton';
 import { PixelDialog } from './components/PixelDialog';
 import { PixelPanel } from './components/PixelPanel';
 import { PixelSectionHeader } from './components/PixelSectionHeader';
-import { PixelTabs } from './components/PixelTabs';
 import { SelectedSlicePanel } from './components/SelectedSlicePanel';
+import { SliceLibraryPanel } from './components/SliceLibraryPanel';
 import { SliceMap } from './components/SliceMap';
 import { SliceSetPanel } from './components/SliceSetPanel';
 import { SourcePanel } from './components/SourcePanel';
@@ -75,6 +85,7 @@ const fallbackInfo: DrumulizerAppInfo = {
 
 const playbackEngine = new PlaybackEngine();
 const onsetWorkerClient = new OnsetWorkerClient();
+const sliceAnalysisWorkerClient = new SliceAnalysisWorkerClient();
 
 const initialSliceState: SliceHistoryState = {
   markers: [],
@@ -125,7 +136,6 @@ const isTextInputTarget = (target: EventTarget | null): boolean => {
 export function App() {
   const { t } = useI18n();
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [selectedTab, setSelectedTab] = useState('LOW');
   const [status, setStatus] = useState<AppStatus>('ready');
   const [importState, setImportState] = useState<AudioImportState>({ status: 'empty' });
   const [metadata, setMetadata] = useState<AudioSourceMetadata | null>(null);
@@ -147,6 +157,16 @@ export function App() {
   const [onsetProgress, setOnsetProgress] = useState<number | null>(null);
   const [onsetAnalyzing, setOnsetAnalyzing] = useState(false);
   const [onsetApplySummary, setOnsetApplySummary] = useState<OnsetApplySummary | null>(null);
+  const [sliceAnalysisResult, setSliceAnalysisResult] = useState<SliceAnalysisResult | null>(null);
+  const [sliceAnalysisProgress, setSliceAnalysisProgress] = useState<number | null>(null);
+  const [sliceAnalysisRunning, setSliceAnalysisRunning] = useState(false);
+  const [sliceAnalysisError, setSliceAnalysisError] = useState<string | null>(null);
+  const [sliceAnnotations, setSliceAnnotations] = useState<SliceAnnotationState>({
+    overrides: {},
+    excluded: {},
+  });
+  const [sliceLibraryFilter, setSliceLibraryFilter] = useState<SliceLibraryFilter>('all');
+  const [sliceLibrarySort, setSliceLibrarySort] = useState<SliceLibrarySort>('index');
   const [inlineSliceError, setInlineSliceError] = useState<SliceEditErrorCode | null>(null);
   const [inlineSliceMessage, setInlineSliceMessage] = useState<string | null>(null);
   const [sliceHistory, setSliceHistory] = useState<SliceHistory>(() =>
@@ -157,6 +177,9 @@ export function App() {
   const importGeneration = useRef(0);
   const onsetGeneration = useRef(0);
   const activeOnsetRequestId = useRef<string | null>(null);
+  const sliceAnalysisGeneration = useRef(0);
+  const activeSliceAnalysisRequestId = useRef<string | null>(null);
+  const previousSliceSignature = useRef<string | null>(null);
   const animationFrame = useRef<number | null>(null);
   const dragStartState = useRef<SliceHistoryState | null>(null);
   const appInfo = useMemo(() => window.drumulizer?.getAppInfo() ?? fallbackInfo, []);
@@ -183,6 +206,22 @@ export function App() {
     () => deriveSlices(markers, sourceLengthSamples, sampleRate),
     [markers, sampleRate, sourceLengthSamples],
   );
+  const currentSliceSignature = useMemo(
+    () => sliceSetSignature(metadata?.id, slices),
+    [metadata?.id, slices],
+  );
+  const sliceAnalysisLifecycle: SliceAnalysisLifecycle = !metadata
+    ? 'unavailable'
+    : sliceAnalysisRunning
+      ? 'analyzing'
+      : sliceAnalysisError
+        ? 'error'
+        : sliceAnalysisResult?.sourceId === metadata.id &&
+            sliceAnalysisResult.sliceSetSignature === currentSliceSignature
+          ? 'ready'
+          : sliceAnalysisResult?.sourceId === metadata.id
+            ? 'stale'
+            : 'not-analyzed';
   const selectedSlice =
     slices.find((slice) => slice.id === sliceHistory.present.selectedSliceId) ?? slices[0] ?? null;
 
@@ -213,6 +252,18 @@ export function App() {
     setOnsetProgress(null);
     setOnsetApplySummary(null);
     setPlayback(playbackEngine.stopCandidateAudition());
+  }, []);
+
+  const cancelSliceAnalysis = useCallback(() => {
+    sliceAnalysisGeneration.current += 1;
+    activeSliceAnalysisRequestId.current = null;
+    sliceAnalysisWorkerClient.cancel();
+    setSliceAnalysisRunning(false);
+    setSliceAnalysisProgress(null);
+  }, []);
+
+  const resetSliceAnnotations = useCallback(() => {
+    setSliceAnnotations({ overrides: {}, excluded: {} });
   }, []);
 
   const cancelOnsetAnalysis = useCallback(() => {
@@ -275,6 +326,10 @@ export function App() {
       setStatus('processing');
       setImportState({ status: 'reading', fileName: label });
       cancelOnsetAnalysis();
+      cancelSliceAnalysis();
+      resetSliceAnnotations();
+      setSliceAnalysisResult(null);
+      setSliceAnalysisError(null);
 
       const result = await resultPromise;
       if (generation !== importGeneration.current) return;
@@ -314,10 +369,12 @@ export function App() {
     [
       applyImportError,
       cancelOnsetAnalysis,
+      cancelSliceAnalysis,
       discardOnsetPreview,
       initializeSlicesForSource,
       metadata,
       resetViewport,
+      resetSliceAnnotations,
       t,
     ],
   );
@@ -335,6 +392,7 @@ export function App() {
   const clearSource = useCallback(() => {
     importGeneration.current += 1;
     cancelOnsetAnalysis();
+    cancelSliceAnalysis();
     discardOnsetPreview();
     playbackEngine.clear();
     audioRuntimeStore.clear();
@@ -345,10 +403,19 @@ export function App() {
     setErrorMessage(null);
     setStatus('ready');
     setSliceHistory(createSliceHistory(initialSliceState));
+    setSliceAnalysisResult(null);
+    setSliceAnalysisError(null);
+    resetSliceAnnotations();
     setInlineSliceError(null);
     setInlineSliceMessage(null);
     resetViewport(0);
-  }, [cancelOnsetAnalysis, discardOnsetPreview, resetViewport]);
+  }, [
+    cancelOnsetAnalysis,
+    cancelSliceAnalysis,
+    discardOnsetPreview,
+    resetSliceAnnotations,
+    resetViewport,
+  ]);
 
   const updateOnsetSettings = useCallback(
     (settings: OnsetDetectionSettings) => {
@@ -441,6 +508,7 @@ export function App() {
     setSelectedPreviewCandidateId(null);
     setStatus('ready');
     setPlayback(playbackEngine.stopSliceAudition());
+    resetSliceAnnotations();
   }, [
     markers,
     metadata,
@@ -448,8 +516,62 @@ export function App() {
     onsetPreview,
     previewCandidates,
     sampleRate,
+    resetSliceAnnotations,
     sourceLengthSamples,
   ]);
+
+  const analyzeCommittedSlices = useCallback(() => {
+    const runtime = audioRuntimeStore.get();
+    if (!metadata || !runtime || slices.length === 0) return;
+    cancelSliceAnalysis();
+    const requestId = `slice-analysis-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    const generation = sliceAnalysisGeneration.current + 1;
+    sliceAnalysisGeneration.current = generation;
+    activeSliceAnalysisRequestId.current = requestId;
+    setSliceAnalysisRunning(true);
+    setSliceAnalysisProgress(0);
+    setSliceAnalysisError(null);
+    setStatus('processing');
+
+    void sliceAnalysisWorkerClient
+      .analyze(
+        {
+          requestId,
+          sourceId: metadata.id,
+          sliceSetSignature: currentSliceSignature,
+          monoData: runtime.analysisMonoData,
+          originalSampleRate: metadata.sampleRate,
+          slices,
+        },
+        (progress) => {
+          if (generation !== sliceAnalysisGeneration.current) return;
+          setSliceAnalysisProgress(Math.max(0, Math.min(100, Math.round(progress))));
+        },
+      )
+      .then((result) => {
+        if (
+          generation !== sliceAnalysisGeneration.current ||
+          activeSliceAnalysisRequestId.current !== result.requestId ||
+          metadata.id !== audioRuntimeStore.get()?.metadata.id ||
+          result.sliceSetSignature !== currentSliceSignature
+        ) {
+          return;
+        }
+        setSliceAnalysisResult(result);
+        setSliceAnalysisRunning(false);
+        setSliceAnalysisProgress(null);
+        setStatus('ready');
+      })
+      .catch(() => {
+        if (generation !== sliceAnalysisGeneration.current) return;
+        setSliceAnalysisRunning(false);
+        setSliceAnalysisProgress(null);
+        setSliceAnalysisError(t('sliceAnalysis.failed'));
+        setStatus('error');
+      });
+  }, [cancelSliceAnalysis, currentSliceSignature, metadata, slices, t]);
 
   const setViewportSafely = useCallback(
     (start: number, nextZoom = zoom) => {
@@ -738,9 +860,25 @@ export function App() {
     return () => {
       if (animationFrame.current) window.cancelAnimationFrame(animationFrame.current);
       onsetWorkerClient.cancel();
+      sliceAnalysisWorkerClient.cancel();
       playbackEngine.clear();
     };
   }, []);
+
+  useEffect(() => {
+    if (!metadata) {
+      previousSliceSignature.current = null;
+      return;
+    }
+    if (
+      previousSliceSignature.current &&
+      previousSliceSignature.current !== currentSliceSignature
+    ) {
+      resetSliceAnnotations();
+      setPlayback(playbackEngine.stopSliceAudition());
+    }
+    previousSliceSignature.current = currentSliceSignature;
+  }, [currentSliceSignature, metadata, resetSliceAnnotations]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -861,6 +999,21 @@ export function App() {
   );
 
   const isBusy = ['reading', 'decoding', 'building-waveform'].includes(importState.status);
+  const roleBySliceId = useMemo(() => {
+    const analysisById = new Map(
+      (sliceAnalysisResult?.analyses ?? []).map((analysis) => [analysis.sliceId, analysis]),
+    );
+    return Object.fromEntries(
+      slices.map((slice) => [
+        slice.id,
+        calculateEffectiveRole(
+          analysisById.get(slice.id) ?? null,
+          sliceAnnotations.overrides[slice.id],
+          Boolean(sliceAnnotations.excluded[slice.id]),
+        ),
+      ]),
+    );
+  }, [sliceAnalysisResult?.analyses, sliceAnnotations, slices]);
 
   return (
     <main
@@ -891,7 +1044,7 @@ export function App() {
         <strong>{t('app.workspace')}</strong>
         <span>{metadata ? metadata.fileName : t('app.noSample')}</span>
         <span>{t('app.analysisPending')}</span>
-        <span>{t('app.patternEngine')}</span>
+        <span>{t(`sliceAnalysis.status.${sliceAnalysisLifecycle}`)}</span>
       </section>
 
       {errorMessage ? <ErrorBanner title={t('app.errorTitle')} message={errorMessage} /> : null}
@@ -1005,21 +1158,59 @@ export function App() {
           <SliceMap
             slices={slices}
             selectedSliceId={selectedSlice?.id ?? null}
+            roleBySliceId={roleBySliceId}
             onSelectSlice={selectSlice}
           />
 
-          <PixelSectionHeader label={t('section.pattern')} code={t('pattern.disabledCode')} />
-          <div className="pattern-workspace pattern-workspace--disabled">
-            <PixelTabs
-              tabs={['LOW', 'MID', 'HIGH', 'TEXTURE']}
-              selected={selectedTab}
-              onSelect={setSelectedTab}
-            />
-            <div className={`lane-preview lane-preview--${selectedTab.toLowerCase()}`}>
-              <strong>{t('pattern.previewTitle')}</strong>
-              <span>{t('pattern.previewBody')}</span>
-            </div>
-          </div>
+          <PixelSectionHeader
+            label={t('section.sliceLibrary')}
+            code={t(`sliceAnalysis.status.${sliceAnalysisLifecycle}`)}
+          />
+          <SliceLibraryPanel
+            slices={slices}
+            selectedSliceId={selectedSlice?.id ?? null}
+            lifecycle={sliceAnalysisLifecycle}
+            result={sliceAnalysisResult}
+            progress={sliceAnalysisProgress}
+            filter={sliceLibraryFilter}
+            sort={sliceLibrarySort}
+            annotations={sliceAnnotations}
+            onAnalyze={analyzeCommittedSlices}
+            onFilterChange={setSliceLibraryFilter}
+            onSortChange={setSliceLibrarySort}
+            onSelectSlice={selectSlice}
+            onOverride={(sliceId, override) =>
+              setSliceAnnotations((current) => ({
+                ...current,
+                overrides: { ...current.overrides, [sliceId]: override },
+              }))
+            }
+            onExclude={(sliceId, excluded) =>
+              setSliceAnnotations((current) => ({
+                ...current,
+                excluded: { ...current.excluded, [sliceId]: excluded },
+              }))
+            }
+            onResetSelected={(sliceId) =>
+              setSliceAnnotations((current) => {
+                const overrides = { ...current.overrides };
+                const excluded = { ...current.excluded };
+                delete overrides[sliceId];
+                delete excluded[sliceId];
+                return { overrides, excluded };
+              })
+            }
+            onResetAll={resetSliceAnnotations}
+            onIncludeAll={() =>
+              setSliceAnnotations((current) => ({
+                ...current,
+                excluded: {},
+              }))
+            }
+          />
+          {sliceAnalysisError ? (
+            <p className="analysis-panel__message">{sliceAnalysisError}</p>
+          ) : null}
         </section>
 
         <aside className="control-rail">

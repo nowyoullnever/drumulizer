@@ -1,14 +1,21 @@
 import { formatDuration } from '../audio/time';
 import type { SliceRegion } from '../slice/types';
 import { useI18n } from '../i18n/useI18n';
+import type { SlicePrimaryRole } from '../audio/sliceAnalysis/sliceAnalysisTypes';
 
 interface SliceMapProps {
   slices: SliceRegion[];
   selectedSliceId: string | null;
+  roleBySliceId?: Record<string, SlicePrimaryRole>;
   onSelectSlice: (sliceId: string) => void;
 }
 
-export function SliceMap({ slices, selectedSliceId, onSelectSlice }: SliceMapProps) {
+export function SliceMap({
+  slices,
+  selectedSliceId,
+  roleBySliceId = {},
+  onSelectSlice,
+}: SliceMapProps) {
   const { t } = useI18n();
   const totalSamples = slices.reduce((sum, slice) => sum + slice.durationSamples, 0);
   const compact = slices.length > 32;
@@ -22,7 +29,9 @@ export function SliceMap({ slices, selectedSliceId, onSelectSlice }: SliceMapPro
           <button
             key={slice.id}
             className={
-              selected ? 'slice-map__block slice-map__block--selected' : 'slice-map__block'
+              selected
+                ? `slice-map__block slice-map__block--${roleBySliceId[slice.id] ?? 'unclassified'} slice-map__block--selected`
+                : `slice-map__block slice-map__block--${roleBySliceId[slice.id] ?? 'unclassified'}`
             }
             style={{ flexBasis: `${Math.max(3, basis)}%` }}
             type="button"

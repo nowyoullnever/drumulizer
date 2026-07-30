@@ -2,6 +2,10 @@
 
 Drumulizer combines 1970s avant-garde fashion graphics, saturated but faded print color, geometric textile references, modular hardware structure, and pixel-interface construction. v0.4.0 adds onset-analysis candidate preview while preserving this identity.
 
+## v0.5.0 Slice Library
+
+The Slice Library keeps the same bordered modular pixel language while becoming a dense working surface. Role color is functional: low uses tomato, mid uses mustard, high uses cobalt, texture uses teal, and unclassified remains neutral. Cards are not nested; list rows, inspector blocks, and role summary chips are compact repeated items.
+
 ## Palette
 
 Raw colors live in `src/renderer/styles/tokens.css`: paper, paper-light, ink, ink-soft, tomato, orange, mustard, cobalt, teal, violet, success, warning, and danger.

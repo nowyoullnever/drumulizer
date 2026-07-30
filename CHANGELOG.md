@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0] - 2026-07-30
+
+- Added worker-based committed slice analysis for `SliceRegion[]` using local analysis-only mono PCM.
+- Added raw slice DSP features, robust per-source normalization, micro-role scores, independent lane scores, automatic role, confidence, warnings, and generation recommendations.
+- Replaced the disabled Pattern Workspace placeholder with a functional Slice Library including role filtering, sorting, selected-slice scoring, feature details, role distribution, overrides, and exclusion controls.
+- Added role-aware Slice Map coloring and bilingual Korean/English UI copy for the new analysis and library surfaces.
+- Added `test:slice-analysis` with a deterministic generated evaluation corpus.
+
 ## [0.4.0] - 2026-07-30
 
 ### Added
