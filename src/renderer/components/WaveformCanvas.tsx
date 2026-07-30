@@ -17,12 +17,14 @@ interface WaveformCanvasProps {
   selectedMarkerId: string | null;
   selectedSlice: SliceRegion | null;
   previewCandidates: OnsetCandidate[];
+  selectedPreviewCandidateId: string | null;
   tool: WaveformTool;
   onSeek: (time: number) => void;
   onPan: (deltaSeconds: number) => void;
   onWheelZoom: (zoomFactor: number, anchorSeconds: number) => void;
   onSelectSliceAtSample: (sampleIndex: number) => void;
   onSelectMarker: (markerId: string | null) => void;
+  onSelectPreviewCandidate: (candidateId: string | null) => void;
   onAddMarker: (sampleIndex: number) => void;
   onMoveMarkerPreview: (markerId: string, sampleIndex: number) => void;
   onMoveMarkerCommit: (markerId: string, sampleIndex: number) => void;
@@ -41,12 +43,14 @@ export function WaveformCanvas({
   selectedMarkerId,
   selectedSlice,
   previewCandidates,
+  selectedPreviewCandidateId,
   tool,
   onSeek,
   onPan,
   onWheelZoom,
   onSelectSliceAtSample,
   onSelectMarker,
+  onSelectPreviewCandidate,
   onAddMarker,
   onMoveMarkerPreview,
   onMoveMarkerCommit,
@@ -92,6 +96,26 @@ export function WaveformCanvas({
           Math.abs(right.sampleIndex - sampleFromClientX(clientX)),
       )[0];
     return marker ?? null;
+  };
+
+  const previewFromClientX = (clientX: number): OnsetCandidate | null => {
+    const canvas = canvasRef.current;
+    if (!canvas || previewCandidates.length === 0) return null;
+    const rect = canvas.getBoundingClientRect();
+    const x = clamp(clientX - rect.left, 0, rect.width);
+    const candidate = previewCandidates
+      .filter((preview) => {
+        const seconds = preview.sampleIndex / sampleRate;
+        if (seconds < viewportStart || seconds > viewportEnd) return false;
+        const candidateX = ((seconds - viewportStart) / viewportDuration) * rect.width;
+        return Math.abs(candidateX - x) <= markerHitWidth / 2;
+      })
+      .sort(
+        (left, right) =>
+          Math.abs(left.sampleIndex - sampleFromClientX(clientX)) -
+          Math.abs(right.sampleIndex - sampleFromClientX(clientX)),
+      )[0];
+    return candidate ?? null;
   };
 
   useEffect(() => {
@@ -223,23 +247,22 @@ export function WaveformCanvas({
       const seconds = candidate.sampleIndex / sampleRate;
       if (seconds < viewportStart || seconds > viewportEnd) return;
       const x = Math.round((seconds - viewportStart) / secondsPerPixel);
+      const selected = candidate.id === selectedPreviewCandidateId;
       ctx.save();
       ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = 'rgba(89, 55, 113, 0.76)';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = selected ? '#593771' : 'rgba(89, 55, 113, 0.76)';
+      ctx.lineWidth = selected ? 4 : 2;
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, rect.height);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(246, 237, 207, 0.9)';
+      ctx.fillStyle = selected
+        ? '#d9aa21'
+        : `rgba(246, 237, 207, ${0.55 + candidate.confidence * 0.35})`;
       ctx.strokeStyle = '#593771';
       ctx.beginPath();
-      ctx.moveTo(x, 2);
-      ctx.lineTo(x + 6, 8);
-      ctx.lineTo(x, 14);
-      ctx.lineTo(x - 6, 8);
-      ctx.closePath();
+      drawCandidateSymbol(ctx, candidate.dominantBand, x, selected ? 10 : 8);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
@@ -255,6 +278,7 @@ export function WaveformCanvas({
     peaks,
     playback.positionSeconds,
     previewCandidates,
+    selectedPreviewCandidateId,
     sampleRate,
     selectedMarkerId,
     selectedSlice,
@@ -281,11 +305,19 @@ export function WaveformCanvas({
           onAddMarker(sample);
           return;
         }
+        const preview = previewFromClientX(event.clientX);
+        if (preview) {
+          onSelectPreviewCandidate(preview.id);
+          onSelectMarker(null);
+          return;
+        }
         const marker = boundaryFromClientX(event.clientX);
         if (marker) {
+          onSelectPreviewCandidate(null);
           onSelectMarker(marker.id);
           return;
         }
+        onSelectPreviewCandidate(null);
         onSelectMarker(null);
         onSelectSliceAtSample(sample);
         onSeek(secondsFromClientX(event.clientX));
@@ -333,3 +365,37 @@ export function WaveformCanvas({
     />
   );
 }
+
+const drawCandidateSymbol = (
+  ctx: CanvasRenderingContext2D,
+  band: OnsetCandidate['dominantBand'],
+  x: number,
+  size: number,
+): void => {
+  if (band === 'low') {
+    ctx.rect(x - size, 6, size * 2, 5);
+    return;
+  }
+  if (band === 'low-mid') {
+    ctx.rect(x - size / 2, 3, size, size);
+    return;
+  }
+  if (band === 'high-mid') {
+    ctx.moveTo(x - size, 12);
+    ctx.lineTo(x + size, 2);
+    ctx.lineTo(x + size, 8);
+    ctx.lineTo(x - size, 18);
+    ctx.closePath();
+    return;
+  }
+  if (band === 'high') {
+    ctx.rect(x - 2, 2, 4, size * 2);
+    ctx.rect(x - size, size, size * 2, 4);
+    return;
+  }
+  ctx.moveTo(x, 2);
+  ctx.lineTo(x + size, 2 + size);
+  ctx.lineTo(x, 2 + size * 2);
+  ctx.lineTo(x - size, 2 + size);
+  ctx.closePath();
+};

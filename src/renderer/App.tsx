@@ -142,6 +142,7 @@ export function App() {
     minimumGapMs: DEFAULT_ONSET_MINIMUM_GAP_MS,
   });
   const [onsetPreview, setOnsetPreview] = useState<OnsetPreview | null>(null);
+  const [selectedPreviewCandidateId, setSelectedPreviewCandidateId] = useState<string | null>(null);
   const [onsetApplyMode, setOnsetApplyMode] = useState<OnsetApplyMode>('replace');
   const [onsetProgress, setOnsetProgress] = useState<number | null>(null);
   const [onsetAnalyzing, setOnsetAnalyzing] = useState(false);
@@ -208,8 +209,10 @@ export function App() {
 
   const discardOnsetPreview = useCallback(() => {
     setOnsetPreview(null);
+    setSelectedPreviewCandidateId(null);
     setOnsetProgress(null);
     setOnsetApplySummary(null);
+    setPlayback(playbackEngine.stopCandidateAudition());
   }, []);
 
   const cancelOnsetAnalysis = useCallback(() => {
@@ -398,8 +401,10 @@ export function App() {
           settingsKey,
           candidates: result.candidates,
           capped: result.capped,
+          diagnostics: result.diagnostics,
           reason: result.reason,
         });
+        setSelectedPreviewCandidateId(result.candidates[0]?.id ?? null);
         setOnsetApplySummary(null);
         setOnsetAnalyzing(false);
         setOnsetProgress(null);
@@ -433,6 +438,7 @@ export function App() {
     );
     setOnsetApplySummary(result.summary);
     setOnsetPreview(null);
+    setSelectedPreviewCandidateId(null);
     setStatus('ready');
     setPlayback(playbackEngine.stopSliceAudition());
   }, [
@@ -665,6 +671,60 @@ export function App() {
       .then(setPlayback);
   }, [prerollMs, selectedSlice]);
 
+  const revealPreviewCandidate = useCallback(
+    (candidateId: string | null) => {
+      const candidate = previewCandidates.find((preview) => preview.id === candidateId);
+      if (!candidate || duration <= 0) return;
+      const seconds = candidate.sampleIndex / sampleRate;
+      if (seconds >= viewportStart && seconds <= viewportEnd) return;
+      setViewportSafely(seconds - viewportDuration / 2, zoom);
+    },
+    [
+      duration,
+      previewCandidates,
+      sampleRate,
+      setViewportSafely,
+      viewportDuration,
+      viewportEnd,
+      viewportStart,
+      zoom,
+    ],
+  );
+
+  const selectPreviewCandidate = useCallback(
+    (candidateId: string | null) => {
+      setSelectedPreviewCandidateId(candidateId);
+      if (candidateId) revealPreviewCandidate(candidateId);
+    },
+    [revealPreviewCandidate],
+  );
+
+  const previousPreviewCandidate = useCallback(() => {
+    const index = previewCandidates.findIndex(
+      (candidate) => candidate.id === selectedPreviewCandidateId,
+    );
+    if (index <= 0) return;
+    selectPreviewCandidate(previewCandidates[index - 1].id);
+  }, [previewCandidates, selectPreviewCandidate, selectedPreviewCandidateId]);
+
+  const nextPreviewCandidate = useCallback(() => {
+    const index = previewCandidates.findIndex(
+      (candidate) => candidate.id === selectedPreviewCandidateId,
+    );
+    if (index < 0 || index >= previewCandidates.length - 1) return;
+    selectPreviewCandidate(previewCandidates[index + 1].id);
+  }, [previewCandidates, selectPreviewCandidate, selectedPreviewCandidateId]);
+
+  const auditionPreviewCandidate = useCallback(() => {
+    const candidate = previewCandidates.find(
+      (preview) => preview.id === selectedPreviewCandidateId,
+    );
+    if (!candidate) return;
+    void playbackEngine
+      .auditionCandidate({ sampleIndex: candidate.sampleIndex, sampleRate })
+      .then(setPlayback);
+  }, [previewCandidates, sampleRate, selectedPreviewCandidateId]);
+
   const playFullFile = useCallback(() => {
     void playbackEngine.play().then(setPlayback);
   }, []);
@@ -715,6 +775,16 @@ export function App() {
         nextSlice();
         return;
       }
+      if (event.key === ',') {
+        event.preventDefault();
+        previousPreviewCandidate();
+        return;
+      }
+      if (event.key === '.') {
+        event.preventDefault();
+        nextPreviewCandidate();
+        return;
+      }
       if (event.key.toLowerCase() === 'a') {
         event.preventDefault();
         auditionSelectedSlice();
@@ -755,10 +825,12 @@ export function App() {
     deleteSelectedMarker,
     metadata,
     nextSlice,
+    nextPreviewCandidate,
     playback.loopEnabled,
     playback.positionSeconds,
     playback.status,
     previousSlice,
+    previousPreviewCandidate,
     redo,
     sliceHistory.present.selectedMarkerId,
     undo,
@@ -868,12 +940,18 @@ export function App() {
               analyzing={onsetAnalyzing}
               progress={onsetProgress}
               candidates={previewCandidates}
+              selectedCandidateId={selectedPreviewCandidateId}
+              diagnostics={onsetPreview?.diagnostics ?? null}
               applyMode={onsetApplyMode}
               resultReason={onsetPreview?.reason ?? null}
               applySummary={onsetApplySummary}
               onSettingsChange={updateOnsetSettings}
               onAnalyze={analyzeOnsets}
               onApplyModeChange={setOnsetApplyMode}
+              onPreviousCandidate={previousPreviewCandidate}
+              onNextCandidate={nextPreviewCandidate}
+              onAuditionCandidate={auditionPreviewCandidate}
+              onStopCandidateAudition={() => setPlayback(playbackEngine.stopCandidateAudition())}
               onApply={applyOnsetPreview}
               onDiscard={discardOnsetPreview}
             />
@@ -909,12 +987,14 @@ export function App() {
               selectedMarkerId={sliceHistory.present.selectedMarkerId}
               selectedSlice={selectedSlice}
               previewCandidates={previewCandidates}
+              selectedPreviewCandidateId={selectedPreviewCandidateId}
               tool={tool}
               onSeek={seek}
               onPan={(delta) => setViewportSafely(viewportStart + delta)}
               onWheelZoom={(factor, anchor) => setZoomSafely(zoom * factor, anchor)}
               onSelectSliceAtSample={selectSliceAtSample}
               onSelectMarker={selectMarker}
+              onSelectPreviewCandidate={selectPreviewCandidate}
               onAddMarker={addMarkerAtSample}
               onMoveMarkerPreview={moveMarkerPreview}
               onMoveMarkerCommit={moveMarkerCommit}

@@ -1,5 +1,6 @@
 import type {
   OnsetAnalysisReason,
+  OnsetAnalysisDiagnostics,
   OnsetApplyMode,
   OnsetApplySummary,
   OnsetCandidate,
@@ -17,12 +18,18 @@ interface AnalysisPanelProps {
   analyzing: boolean;
   progress: number | null;
   candidates: OnsetCandidate[];
+  selectedCandidateId: string | null;
+  diagnostics: OnsetAnalysisDiagnostics | null;
   applyMode: OnsetApplyMode;
   resultReason: OnsetAnalysisReason | null;
   applySummary: OnsetApplySummary | null;
   onSettingsChange: (settings: OnsetDetectionSettings) => void;
   onAnalyze: () => void;
   onApplyModeChange: (mode: OnsetApplyMode) => void;
+  onPreviousCandidate: () => void;
+  onNextCandidate: () => void;
+  onAuditionCandidate: () => void;
+  onStopCandidateAudition: () => void;
   onApply: () => void;
   onDiscard: () => void;
 }
@@ -33,12 +40,18 @@ export function AnalysisPanel({
   analyzing,
   progress,
   candidates,
+  selectedCandidateId,
+  diagnostics,
   applyMode,
   resultReason,
   applySummary,
   onSettingsChange,
   onAnalyze,
   onApplyModeChange,
+  onPreviousCandidate,
+  onNextCandidate,
+  onAuditionCandidate,
+  onStopCandidateAudition,
   onApply,
   onDiscard,
 }: AnalysisPanelProps) {
@@ -52,6 +65,8 @@ export function AnalysisPanel({
       : candidates.length === 0
         ? t('analysis.noOnsetsFound')
         : t('analysis.complete');
+  const selectedIndex = candidates.findIndex((candidate) => candidate.id === selectedCandidateId);
+  const selectedCandidate = selectedIndex >= 0 ? candidates[selectedIndex] : null;
 
   return (
     <div className="analysis-panel">
@@ -90,7 +105,69 @@ export function AnalysisPanel({
           <dt>{t('analysis.result')}</dt>
           <dd>{statusText}</dd>
         </div>
+        <div>
+          <dt>{t('analysis.candidateDensity')}</dt>
+          <dd>{diagnostics ? diagnostics.candidateDensityPerSecond.toFixed(1) : '0.0'}</dd>
+        </div>
+        <div>
+          <dt>{t('analysis.strongestBand')}</dt>
+          <dd>
+            {diagnostics?.strongestBand
+              ? t(`analysis.band.${diagnostics.strongestBand}`)
+              : t('analysis.none')}
+          </dd>
+        </div>
       </dl>
+
+      <div className="candidate-details">
+        <strong>{t('analysis.candidateDetails')}</strong>
+        {selectedCandidate ? (
+          <dl>
+            <div>
+              <dt>{t('analysis.candidateNumber')}</dt>
+              <dd>
+                {selectedIndex + 1} / {candidates.length}
+              </dd>
+            </div>
+            <div>
+              <dt>{t('slice.start')}</dt>
+              <dd>{selectedCandidate.timeSeconds.toFixed(3)}s</dd>
+            </div>
+            <div>
+              <dt>{t('analysis.confidence')}</dt>
+              <dd>{Math.round(selectedCandidate.confidence * 100)}%</dd>
+            </div>
+            <div>
+              <dt>{t('analysis.dominantBand')}</dt>
+              <dd>{t(`analysis.band.${selectedCandidate.dominantBand}`)}</dd>
+            </div>
+            <div>
+              <dt>{t('analysis.supportingFeatures')}</dt>
+              <dd>{selectedCandidate.supportCount}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p>{t('analysis.selectPreviewMarker')}</p>
+        )}
+      </div>
+
+      <div className="analysis-panel__actions">
+        <PixelButton onClick={onPreviousCandidate} disabled={selectedIndex <= 0 || analyzing}>
+          {t('analysis.previousCandidate')}
+        </PixelButton>
+        <PixelButton
+          onClick={onNextCandidate}
+          disabled={selectedIndex < 0 || selectedIndex >= candidates.length - 1 || analyzing}
+        >
+          {t('analysis.nextCandidate')}
+        </PixelButton>
+        <PixelButton onClick={onAuditionCandidate} disabled={!selectedCandidate || analyzing}>
+          {t('analysis.auditionCandidate')}
+        </PixelButton>
+        <PixelButton onClick={onStopCandidateAudition} disabled={!hasSource}>
+          {t('analysis.stopCandidateAudition')}
+        </PixelButton>
+      </div>
 
       <div className="analysis-panel__mode" role="group" aria-label={t('analysis.applyMode')}>
         <strong>{t('analysis.applyMode')}</strong>
@@ -129,6 +206,9 @@ export function AnalysisPanel({
       ) : null}
       {resultReason === 'CANDIDATE_LIMIT_REACHED' ? (
         <p className="analysis-panel__message">{t('analysis.candidateLimitReached')}</p>
+      ) : null}
+      {diagnostics?.denseSuppressionApplied ? (
+        <p className="analysis-panel__message">{t('analysis.denseAdjusted')}</p>
       ) : null}
     </div>
   );

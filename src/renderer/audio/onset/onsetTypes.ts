@@ -29,7 +29,30 @@ export interface OnsetCandidate {
   timeSeconds: number;
   confidence: number;
   score: number;
+  prominence: number;
+  supportCount: number;
   dominantBand: OnsetBand;
+}
+
+export interface OnsetFeatureSupport {
+  low: boolean;
+  lowMid: boolean;
+  highMid: boolean;
+  high: boolean;
+  energy: boolean;
+  lowEnvelope: boolean;
+}
+
+export interface OnsetAnalysisDiagnostics {
+  frameCount: number;
+  rawPeakCount: number;
+  gatedPeakCount: number;
+  finalCandidateCount: number;
+  durationSeconds: number;
+  candidateDensityPerSecond: number;
+  strongestBand: OnsetBand | null;
+  capped: boolean;
+  denseSuppressionApplied: boolean;
 }
 
 export interface OnsetAnalysisResult {
@@ -41,6 +64,7 @@ export interface OnsetAnalysisResult {
   hopSize: number;
   sourceLengthSamples: number;
   capped: boolean;
+  diagnostics: OnsetAnalysisDiagnostics;
   reason?: OnsetAnalysisReason;
 }
 
@@ -57,6 +81,7 @@ export interface OnsetPreview {
   settingsKey: string;
   candidates: OnsetCandidate[];
   capped: boolean;
+  diagnostics: OnsetAnalysisDiagnostics;
   reason?: OnsetAnalysisReason;
 }
 

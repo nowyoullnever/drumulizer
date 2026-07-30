@@ -793,6 +793,30 @@ input:disabled {
   padding: var(--space-2);
 }
 
+.candidate-details {
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+  padding: var(--space-2);
+}
+
+.candidate-details dl {
+  display: grid;
+  gap: 4px;
+  margin: var(--space-2) 0 0;
+}
+
+.candidate-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.candidate-details dt,
+.candidate-details dd,
+.candidate-details p {
+  margin: 0;
+}
+
 .drag-overlay {
   position: fixed;
   inset: var(--space-6);

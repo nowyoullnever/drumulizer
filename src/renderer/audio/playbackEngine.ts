@@ -1,5 +1,5 @@
 import { getAudioContext } from './importAudio';
-import { computeAuditionRegion } from './auditionMath';
+import { computeAuditionRegion, computeCandidateAuditionRegion } from './auditionMath';
 import { calculatePauseOffset, calculatePlaybackPosition, clampSeek } from './playbackMath';
 import type { PlaybackSnapshot, PlaybackStatus } from './types';
 
@@ -112,6 +112,23 @@ export class PlaybackEngine {
     endSeconds: number;
     prerollMs: number;
   }): Promise<PlaybackSnapshot> {
+    return this.auditionRegion(computeAuditionRegion(input));
+  }
+
+  async auditionCandidate(input: {
+    sampleIndex: number;
+    sampleRate: number;
+    preMs?: number;
+    postMs?: number;
+  }): Promise<PlaybackSnapshot> {
+    return this.auditionRegion(computeCandidateAuditionRegion(input));
+  }
+
+  private async auditionRegion(region: {
+    offsetSeconds: number;
+    durationSeconds: number;
+    fadeSeconds: number;
+  }): Promise<PlaybackSnapshot> {
     if (!this.buffer) return this.snapshot();
     this.context = getAudioContext();
     if (this.context.state === 'suspended') await this.context.resume();
@@ -120,7 +137,6 @@ export class PlaybackEngine {
     this.stopAudition();
     this.status = 'ready';
 
-    const region = computeAuditionRegion(input);
     if (region.durationSeconds <= 0) return this.snapshot();
 
     const now = this.context.currentTime;
@@ -155,6 +171,11 @@ export class PlaybackEngine {
   }
 
   stopSliceAudition(): PlaybackSnapshot {
+    this.stopAudition();
+    return this.snapshot();
+  }
+
+  stopCandidateAudition(): PlaybackSnapshot {
     this.stopAudition();
     return this.snapshot();
   }

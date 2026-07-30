@@ -8,6 +8,10 @@ export const BAND_RANGES: Record<Exclude<OnsetBand, 'broadband'>, [number, numbe
   high: [4000, 12000],
 };
 
+const BAND_ORDER = ['low', 'low-mid', 'high-mid', 'high'] as const;
+const LOG_MAGNITUDE_SCALE = 24;
+const MINIMUM_BAND_ENERGY_RATIO = 0.0002;
+
 export interface NoveltyCurves {
   bandFlux: Record<Exclude<OnsetBand, 'broadband'>, Float32Array>;
   energyRise: Float32Array;
@@ -28,12 +32,24 @@ export const analyzeSpectralFlux = (
   const energyRise = new Float32Array(frameCount);
   const highFrequencyNovelty = new Float32Array(frameCount);
   const previousMagnitudes = new Float32Array(frameSize / 2 + 1);
+  const magnitudes = new Float32Array(frameSize / 2 + 1);
+  const frameData = new Float32Array(frameSize);
   const window = createHannWindow(frameSize);
+  const binRanges = BAND_ORDER.map(
+    (band) => [band, binsForBand(BAND_RANGES[band], sampleRate, frameSize)] as const,
+  );
+  const frequencyWeights = Float32Array.from({ length: frameSize / 2 + 1 }, (_, bin) => {
+    const frequency = (bin * sampleRate) / frameSize;
+    return frequency / Math.max(1, sampleRate / 2);
+  });
+  let globalReferenceEnergy = 0;
+  for (let index = 0; index < samples.length; index += 1)
+    globalReferenceEnergy += samples[index] * samples[index];
+  globalReferenceEnergy = Math.sqrt(globalReferenceEnergy / Math.max(1, samples.length));
   let previousRms = 0;
 
   for (let frame = 0; frame < frameCount; frame += 1) {
     const offset = frame * hopSize;
-    const frameData = new Float32Array(frameSize);
     let energy = 0;
     for (let index = 0; index < frameSize; index += 1) {
       const value = (samples[offset + index] ?? 0) * window[index];
@@ -44,9 +60,12 @@ export const analyzeSpectralFlux = (
     energyRise[frame] = Math.max(0, rms - previousRms) / (previousRms + 0.000001);
     previousRms = rms;
 
-    const magnitudes = positiveMagnitudes(fftRadix2(frameData));
-    for (const band of Object.keys(BAND_RANGES) as Exclude<OnsetBand, 'broadband'>[]) {
-      const [startBin, endBin] = binsForBand(BAND_RANGES[band], sampleRate, frameSize);
+    magnitudes.set(positiveMagnitudes(fftRadix2(frameData)));
+    for (let bin = 0; bin < magnitudes.length; bin += 1) {
+      magnitudes[bin] = Math.log1p(LOG_MAGNITUDE_SCALE * magnitudes[bin]);
+    }
+
+    for (const [band, [startBin, endBin]] of binRanges) {
       let flux = 0;
       let bandEnergy = 0;
       for (let bin = startBin; bin <= endBin; bin += 1) {
@@ -54,14 +73,18 @@ export const analyzeSpectralFlux = (
         flux += Math.max(0, magnitude - previousMagnitudes[bin]);
         bandEnergy += magnitude;
       }
-      bandFlux[band][frame] = endBin >= startBin ? flux / (bandEnergy + 0.000001) : 0;
+      const binCount = Math.max(1, endBin - startBin + 1);
+      const energyFloor = Math.max(
+        0.00001,
+        globalReferenceEnergy * LOG_MAGNITUDE_SCALE * MINIMUM_BAND_ENERGY_RATIO * binCount,
+      );
+      bandFlux[band][frame] = endBin >= startBin ? flux / Math.max(bandEnergy, energyFloor) : 0;
     }
 
     let weighted = 0;
     let weightSum = 0;
     for (let bin = 1; bin < magnitudes.length; bin += 1) {
-      const frequency = (bin * sampleRate) / frameSize;
-      const weight = frequency / Math.max(1, sampleRate / 2);
+      const weight = frequencyWeights[bin];
       weighted += Math.max(0, magnitudes[bin] - previousMagnitudes[bin]) * weight;
       weightSum += weight;
     }

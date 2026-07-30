@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { detectOnsets } from '../audio/onset/detectOnsets';
+import { robustLocalNormalize } from '../audio/onset/adaptiveThreshold';
+import { calibrateConfidence, detectOnsets } from '../audio/onset/detectOnsets';
 import { clampOnsetSettings } from '../audio/onset/onsetTypes';
 import { enforceMinimumFrameGap } from '../audio/onset/peakPicking';
 import { refineOnsetSample } from '../audio/onset/refineOnsets';
@@ -41,14 +42,14 @@ describe('onset detection candidates', () => {
     expect(
       enforceMinimumFrameGap(
         [
-          { frameIndex: 10, score: 1 },
-          { frameIndex: 12, score: 3 },
+          { frameIndex: 10, score: 1, prominence: 0.5 },
+          { frameIndex: 12, score: 3, prominence: 1 },
         ],
         45,
         sampleRate,
         128,
       ),
-    ).toEqual([{ frameIndex: 12, score: 3 }]);
+    ).toEqual([{ frameIndex: 12, score: 3, prominence: 1 }]);
 
     const far = detect(impulses([3000, 9000]), 80, 45);
     expect(far.candidates.length).toBeGreaterThanOrEqual(2);
@@ -91,6 +92,38 @@ describe('onset detection candidates', () => {
       sensitivity: 100,
       minimumGapMs: 20,
     });
+  });
+
+  it('normalizes blockwise novelty without non-finite output or severe block seams', () => {
+    const values = Float32Array.from({ length: 260 }, (_, index) =>
+      index === 127 || index === 128 ? 4 : Math.sin(index / 11) * 0.1 + (index > 128 ? 0.2 : 0),
+    );
+    values[20] = Number.NaN;
+    values[21] = Number.POSITIVE_INFINITY;
+    const normalized = robustLocalNormalize(values, sampleRate, 128);
+    expect(normalized).toHaveLength(values.length);
+    expect([...normalized].every(Number.isFinite)).toBe(true);
+    expect(Math.abs(normalized[127] - normalized[128])).toBeLessThan(10);
+  });
+
+  it('calibrates confidence with bounded monotonic evidence', () => {
+    const weak = calibrateConfidence({
+      score: 1.2,
+      threshold: 1,
+      prominence: 0.4,
+      attackEvidence: 0.5,
+      supportCount: 1,
+    });
+    const strong = calibrateConfidence({
+      score: 8,
+      threshold: 1,
+      prominence: 6,
+      attackEvidence: 6,
+      supportCount: 4,
+    });
+    expect(weak).toBeGreaterThanOrEqual(0);
+    expect(weak).toBeLessThan(strong);
+    expect(strong).toBeLessThanOrEqual(1);
   });
 
   it('refines toward attack, keeps bounds, and supports replace/merge integration', () => {

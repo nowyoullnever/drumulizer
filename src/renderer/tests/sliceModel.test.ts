@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_HISTORY_ENTRIES } from '../../shared/constants/slice';
-import { computeAuditionRegion } from '../audio/auditionMath';
+import { computeAuditionRegion, computeCandidateAuditionRegion } from '../audio/auditionMath';
 import {
   addMarker,
   deleteMarker,
@@ -249,5 +249,27 @@ describe('slice audition math', () => {
     expect(shortRegion.durationSeconds).toBe(0.009);
     expect(shortRegion.fadeSeconds).toBeCloseTo(0.001);
     expect(shortRegion.prerollSeconds).toBe(0.005);
+  });
+
+  it('computes candidate audition windows with pre-roll and start clamping', () => {
+    const centered = computeCandidateAuditionRegion({
+      sampleIndex: 500,
+      sampleRate: 1000,
+      preMs: 20,
+      postMs: 120,
+    });
+    expect(centered.offsetSeconds).toBeCloseTo(0.48);
+    expect(centered.durationSeconds).toBeCloseTo(0.14);
+    expect(centered.prerollSeconds).toBeCloseTo(0.02);
+
+    const nearStart = computeCandidateAuditionRegion({
+      sampleIndex: 5,
+      sampleRate: 1000,
+      preMs: 20,
+      postMs: 120,
+    });
+    expect(nearStart.offsetSeconds).toBe(0);
+    expect(nearStart.durationSeconds).toBe(0.125);
+    expect(nearStart.prerollSeconds).toBe(0.005);
   });
 });

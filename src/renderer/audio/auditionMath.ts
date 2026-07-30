@@ -29,3 +29,19 @@ export const computeAuditionRegion = (input: {
     prerollSeconds,
   };
 };
+
+export const computeCandidateAuditionRegion = (input: {
+  sampleIndex: number;
+  sampleRate: number;
+  preMs?: number;
+  postMs?: number;
+}) => {
+  const sampleRate =
+    Number.isFinite(input.sampleRate) && input.sampleRate > 0 ? input.sampleRate : 1;
+  const centerSeconds = Math.max(0, input.sampleIndex) / sampleRate;
+  return computeAuditionRegion({
+    startSeconds: centerSeconds,
+    endSeconds: centerSeconds + Math.max(0, input.postMs ?? 120) / 1000,
+    prerollMs: input.preMs ?? 20,
+  });
+};
