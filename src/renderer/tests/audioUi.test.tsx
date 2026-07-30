@@ -93,7 +93,7 @@ describe('audio UI behavior', () => {
 
   it('renders drag rejection and ignores keyboard shortcuts inside inputs', () => {
     renderWithI18n(<App />);
-    const app = screen.getByText('DRUMULIZER / v0.2.0').closest('main') as HTMLElement;
+    const app = screen.getByText('DRUMULIZER / v0.3.0').closest('main') as HTMLElement;
     fireEvent.drop(app, {
       dataTransfer: {
         files: [
@@ -143,6 +143,21 @@ describe('audio UI behavior', () => {
     expect(screen.getByText('Replace file')).toBeInTheDocument();
     expect(screen.getByText('local-test.wav')).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('en');
+  });
+
+  it('renders slice editor controls in both locales', async () => {
+    const user = userEvent.setup();
+    renderWithI18n(<App />);
+    expect(screen.getByText('슬라이스 세트')).toBeInTheDocument();
+    expect(screen.getAllByText('선택 슬라이스').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /\+ 마커 추가/ })).toBeInTheDocument();
+
+    await user.click(
+      screen.getByLabelText('언어').querySelector('input[value="en"]') as HTMLElement,
+    );
+    expect(screen.getByText('Slice Set')).toBeInTheDocument();
+    expect(screen.getAllByText('Selected Slice').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /\+ Add Marker/ })).toBeInTheDocument();
   });
 
   it('localizes the status module states', () => {

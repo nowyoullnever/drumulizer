@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0] - 2026-07-30
+
+### Added
+
+- Manual waveform slice markers
+- Marker selection, dragging, and deletion
+- Selected-slice highlighting and metadata
+- Slice Map navigation
+- Equal division presets and custom division
+- Zero-crossing assistance
+- Slice audition with short fades and optional pre-roll
+- Slice edit Undo and Redo
+- Korean and English slice-editor interface
+
 ## [0.2.0] - 2026-07-30
 
 ### Added

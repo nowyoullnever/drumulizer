@@ -17,7 +17,7 @@ The main window uses:
 - `webSecurity: true`
 - `allowRunningInsecureContent: false`
 
-The preload bridge exposes only `window.drumulizer.getAppInfo()`.
+The preload bridge exposes only `window.drumulizer.getAppInfo()` and `window.drumulizer.selectLocalAudioFile()`. The audio file operation is a narrow IPC request: main owns the native file dialog, accepts one local WAV or MP3 file, validates file type and size, reads bytes, and returns serializable metadata plus an `ArrayBuffer`.
 
 ## Navigation and Permissions
 

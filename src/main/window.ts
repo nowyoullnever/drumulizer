@@ -14,7 +14,7 @@ export const createMainWindow = async (isDevelopment: boolean): Promise<BrowserW
     show: false,
     backgroundColor: '#e5d5aa',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: join(__dirname, '../preload/index.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,

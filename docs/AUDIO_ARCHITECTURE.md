@@ -1,6 +1,6 @@
 # Audio Architecture
 
-Drumulizer v0.2.0 uses the Web Audio API locally. No network audio source exists.
+Drumulizer v0.3.0 uses the Web Audio API locally. No network audio source exists.
 
 ## AudioContext Lifecycle
 
@@ -30,6 +30,22 @@ AudioContext.destination
 
 Source nodes are recreated on play or seek. Repeated play does not create overlapping sources. Stop disconnects the active source and returns the cursor to zero.
 
+## Slice Audition Graph
+
+```text
+AudioBufferSourceNode
+        |
+Audition GainNode
+        |
+Master GainNode
+        |
+AudioContext.destination
+```
+
+Slice audition starts from the selected slice start, optionally minus clamped pre-roll, and schedules `start()` and `stop()` with Web Audio times. The renderer does not use JavaScript timers as the authoritative stop mechanism. A short gain fade is automated on the audition gain node and clamped to 25% of the selected slice duration.
+
+Starting full-file playback stops any active slice audition. Starting slice audition stops full-file playback first. Full-file loop does not affect slice audition.
+
 ## Playback Math
 
 Playback position is derived from `AudioContext.currentTime`, source start context time, and source start offset. `requestAnimationFrame` updates the visual playhead only; it is not the authoritative audio clock.
@@ -40,4 +56,4 @@ Loop mode uses the source node loop flag for full-file looping. Loop does not cr
 
 ## Cleanup
 
-Replacing or clearing a source stops playback, disconnects source nodes, invalidates stale imports, clears waveform references, resets the cursor, and avoids keeping raw import bytes after successful decode.
+Replacing or clearing a source stops playback and audition, disconnects source nodes, invalidates stale imports, clears waveform references, resets the cursor, resets slice markers/history, and avoids keeping raw import bytes after successful decode. Failed replacement preserves the previous decoded source and slice edit state.

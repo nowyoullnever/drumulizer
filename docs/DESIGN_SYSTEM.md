@@ -1,6 +1,6 @@
 # Design System
 
-Drumulizer combines 1970s avant-garde fashion graphics, saturated but faded print color, geometric textile references, modular hardware structure, and pixel-interface construction. v0.2.0 adds a functional audio workspace while preserving this identity.
+Drumulizer combines 1970s avant-garde fashion graphics, saturated but faded print color, geometric textile references, modular hardware structure, and pixel-interface construction. v0.3.0 adds manual slice editing while preserving this identity.
 
 ## Palette
 
@@ -31,6 +31,14 @@ Reusable presets: checker, diagonal stripe, halftone dot, stepped block, and wid
 ## Component States
 
 Components support hover, active, selected, pressed, disabled, and focus-visible states. Icon-only controls need `aria-label`.
+
+## Slice Editor
+
+The slice editor uses the same modular hardware language as the rest of the workspace. Markers are high-contrast vertical handles over the waveform, fixed source boundaries are visually distinct from editable markers, and the selected slice uses a translucent block highlight that does not obscure waveform peaks.
+
+The Slice Set panel keeps edit controls compact: tool selection, Undo/Redo, Reset Markers, zero-crossing assist, equal division presets, and custom division live together. The Selected Slice panel focuses on the current region's timing, sample range, navigation, audition, pre-roll, and marker deletion.
+
+Slice Map blocks are proportional to sample duration and must remain scannable when there are many slices. Compact labels are allowed when dense maps would otherwise overflow.
 
 ## Header Status
 
