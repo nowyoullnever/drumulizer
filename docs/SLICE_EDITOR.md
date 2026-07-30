@@ -2,6 +2,10 @@
 
 Drumulizer v0.4.0 keeps manual slice editing as the committed editing model. Offline onset analysis can create non-destructive preview candidates, but markers change only when the user applies Replace or Merge.
 
+## v0.5.0 Analysis Invalidation
+
+Slice analysis belongs to committed boundaries. Marker add, move commit, delete, equal division, reset, onset Replace/Merge apply, undo/redo boundary changes, source replacement, and source clear make existing analysis stale and clear overrides/exclusions. Zoom, pan, playback, audition, language, selected slice, library filter/sort, role override, and exclusion do not change boundaries.
+
 ## Marker Model
 
 Editable markers are stored as integer sample indices:

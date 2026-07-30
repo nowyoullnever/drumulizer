@@ -1,5 +1,12 @@
 # Project Structure
 
+## v0.5.0 Additions
+
+- `src/renderer/audio/sliceAnalysis/`: committed-slice feature extraction, normalization, role scoring, worker, and worker client.
+- `src/renderer/audio/sliceAnalysis/evaluation/`: deterministic generated slice-role fixtures.
+- `src/renderer/components/SliceLibraryPanel.tsx`: role filtering, sorting, inspection, override, and exclusion UI.
+- `src/renderer/tests/sliceAnalysis.test.ts`: focused slice analysis regression coverage.
+
 ```text
 src/
   main/                 Electron app lifecycle, BrowserWindow, and security policy

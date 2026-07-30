@@ -724,6 +724,25 @@ input:disabled {
   cursor: pointer;
 }
 
+.slice-map__block--low {
+  background: rgba(217, 74, 50, 0.76);
+  color: var(--color-paper-light);
+}
+
+.slice-map__block--mid {
+  background: rgba(229, 176, 55, 0.84);
+}
+
+.slice-map__block--high {
+  background: rgba(39, 85, 165, 0.78);
+  color: var(--color-paper-light);
+}
+
+.slice-map__block--texture {
+  background: rgba(31, 147, 130, 0.78);
+  color: var(--color-paper-light);
+}
+
 .slice-map__block:hover {
   background: var(--control-hover);
 }
@@ -815,6 +834,162 @@ input:disabled {
 .candidate-details dd,
 .candidate-details p {
   margin: 0;
+}
+
+.slice-library {
+  display: grid;
+  gap: var(--space-3);
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-secondary);
+  padding: var(--space-3);
+}
+
+.slice-library__status,
+.slice-library__controls,
+.role-distribution,
+.slice-library__actions {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.slice-library__status {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+  padding: var(--space-2);
+}
+
+.slice-library__status--ready strong {
+  color: var(--color-success);
+}
+
+.slice-library__status--stale strong,
+.slice-library__status--error strong {
+  color: var(--color-danger);
+}
+
+.role-distribution {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.role-chip {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2);
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+  padding: var(--space-2);
+}
+
+.role-chip--low,
+.slice-library__row--low {
+  box-shadow: inset 6px 0 0 var(--color-tomato);
+}
+
+.role-chip--mid,
+.slice-library__row--mid {
+  box-shadow: inset 6px 0 0 var(--color-mustard);
+}
+
+.role-chip--high,
+.slice-library__row--high {
+  box-shadow: inset 6px 0 0 var(--color-cobalt);
+}
+
+.role-chip--texture,
+.slice-library__row--texture {
+  box-shadow: inset 6px 0 0 var(--color-teal);
+}
+
+.slice-library__controls {
+  grid-template-columns: 1fr 1fr;
+}
+
+.slice-library__controls label {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.slice-library__controls select {
+  min-height: 36px;
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  padding: var(--space-1);
+  font: inherit;
+}
+
+.slice-library__grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
+  gap: var(--space-3);
+}
+
+.slice-library__list {
+  display: grid;
+  gap: var(--space-1);
+  max-height: 420px;
+  overflow: auto;
+}
+
+.slice-library__row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 40px;
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  text-align: left;
+  padding: var(--space-2);
+}
+
+.slice-library__row--selected {
+  background: var(--color-paper-light);
+  outline: var(--border-emphasis) solid var(--color-tomato);
+}
+
+.slice-inspector,
+.feature-details {
+  display: grid;
+  gap: var(--space-2);
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+  padding: var(--space-2);
+}
+
+.slice-inspector dl,
+.feature-details dl {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.slice-inspector dl div,
+.feature-details dl div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2);
+  border-bottom: var(--border-standard) solid rgba(38, 30, 26, 0.18);
+  padding-bottom: var(--space-1);
+}
+
+.slice-inspector dd,
+.feature-details dd {
+  margin: 0;
+  text-align: right;
+}
+
+.role-override {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.slice-library__actions {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .drag-overlay {

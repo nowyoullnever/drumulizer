@@ -2,6 +2,10 @@
 
 The built Drumulizer application must run without internet access and must not include networking features. v0.4.0 imports audio only from user-selected local WAV or MP3 files and runs waveform, slice, and onset analysis locally.
 
+## v0.5.0
+
+Slice analysis is deterministic local DSP. It does not call network APIs, fetch remote models, use telemetry, perform HPSS/source separation, classify instruments by name, infer BPM, create beat grids, or generate patterns.
+
 ## Production
 
 Production blocks outgoing HTTP and HTTPS requests from the Electron session. The app does not use remote APIs, cloud AI, machine learning services, telemetry, analytics, crash-reporting services, CDNs, online font loading, remote images, remote stylesheets, automatic updates, remote configuration, feature flags, online authentication, or remote license checks. There is no remote URL import field, browser component, network client, or remote media loader.

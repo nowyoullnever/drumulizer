@@ -2,6 +2,10 @@
 
 Drumulizer v0.4.0 uses the Web Audio API and local renderer workers. No network audio source exists.
 
+## v0.5.0 Slice Analysis
+
+Slice analysis uses the same local analysis-only mono PCM created during import. The renderer sends committed `SliceRegion[]` and a slice-set signature to `sliceAnalysis.worker.ts`; onset preview candidates are not analyzed. Results return to the renderer as raw features, normalized features, micro-role scores, lane scores, automatic role, confidence, warnings, and recommendations.
+
 ## AudioContext Lifecycle
 
 The renderer lazily creates one shared `AudioContext` after a user gesture. The context is resumed before decoding, full-file playback, slice audition, or candidate audition if it is suspended.

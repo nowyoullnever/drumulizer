@@ -1,6 +1,6 @@
 # Drumulizer
 
-Drumulizer is a Windows desktop application for building a fully local, sample-based IDM drum-loop workflow. Version `0.4.0` adds offline transient/onset analysis, non-destructive candidate preview, candidate audition, and Replace/Merge marker application on top of local WAV/MP3 import, waveform playback, manual slice editing, equal division, and slice audition.
+Drumulizer is a Windows desktop application for building a fully local, sample-based IDM drum-loop workflow. Version `0.5.0` adds committed-slice analysis, role scoring, role override/exclusion controls, a functional Slice Library, and role-aware Slice Map visuals on top of local WAV/MP3 import, waveform playback, manual slice editing, equal division, slice audition, and offline onset preview.
 
 Current status: local audio slice workspace with manual editing and offline onset assistance. It does not use AI, machine learning, drum classification, BPM detection, sequencing, pattern generation, project saving, or audio export.
 
@@ -68,6 +68,8 @@ Selected-slice audition uses the original decoded audio, scheduled Web Audio sta
 ## Offline Onset Analysis
 
 The v0.4.0 detector runs locally in a renderer worker. It uses deterministic multiband spectral flux, adaptive blockwise normalization, transient envelope features, peak selection, dense-material suppression, and source-space onset refinement. The detector creates preview candidates only; committed slice markers do not change until the user applies the preview.
+
+The v0.5.0 slice analyzer runs locally in a renderer worker against committed `SliceRegion[]`. It computes raw DSP features, robust per-source normalization, micro-role scores, independent low/mid/high/texture lane scores, automatic primary role, confidence, warnings, and generation recommendations. The Slice Library can filter, sort, inspect, override, and exclude slices without changing marker boundaries.
 
 Preview candidates can be selected on the waveform, navigated with Previous/Next buttons or `,` and `.` shortcuts, and auditioned with a short 20ms pre-roll and 120ms post window. Candidate confidence, dominant band, and supporting feature count are shown as diagnostics, not as instrument labels.
 

@@ -2,6 +2,10 @@
 
 Drumulizer v0.4.0 includes internal Korean and English renderer localization.
 
+## v0.5.0 Copy Areas
+
+New Slice Analysis and Slice Library strings are present in both Korean and English. This includes lifecycle labels, role labels, filters, sorting labels, override/exclusion controls, recommendation text, and feature inspector labels.
+
 ## Locale Flow
 
 - Supported locales: `ko`, `en`
