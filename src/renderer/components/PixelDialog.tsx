@@ -6,9 +6,16 @@ interface PixelDialogProps {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  closeLabel?: string;
 }
 
-export function PixelDialog({ open, title, children, onClose }: PixelDialogProps) {
+export function PixelDialog({
+  open,
+  title,
+  children,
+  onClose,
+  closeLabel = 'Close',
+}: PixelDialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,7 +42,7 @@ export function PixelDialog({ open, title, children, onClose }: PixelDialogProps
       >
         <header className="pixel-dialog__header pattern pattern--stepped">
           <h2 id="pixel-dialog-title">{title}</h2>
-          <PixelButton onClick={onClose}>CLOSE</PixelButton>
+          <PixelButton onClick={onClose}>{closeLabel}</PixelButton>
         </header>
         <div className="pixel-dialog__body">{children}</div>
       </div>

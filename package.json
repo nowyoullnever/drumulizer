@@ -1,6 +1,6 @@
 {
   "name": "drumulizer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Offline sample-based IDM drum-loop generator foundation.",
   "author": "nowyoullnever",
   "license": "UNLICENSED",
@@ -17,7 +17,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "build": "npm run typecheck && electron-vite build",
-    "dist:win": "npm run build && electron-builder --win --x64 --config electron-builder.yml"
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never --config electron-builder.yml"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.7.0",

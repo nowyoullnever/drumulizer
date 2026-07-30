@@ -11,3 +11,7 @@ coverage/
 *.local
 out/
 build/*.exe
+manual-fixtures/
+dev-vite.log
+dev-vite.err.log
+dev-vite.pid

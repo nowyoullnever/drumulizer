@@ -8,16 +8,16 @@ function BrokenComponent(): ReactNode {
 }
 
 describe('ErrorBoundary', () => {
-  it('shows a concise branded fallback', () => {
+  it('shows a concise localized branded fallback', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     render(
-      <ErrorBoundary>
+      <ErrorBoundary locale="en">
         <BrokenComponent />
       </ErrorBoundary>,
     );
 
-    expect(screen.getByText('DRUMULIZER RENDERER ERROR')).toBeInTheDocument();
+    expect(screen.getByText('Drumulizer renderer error')).toBeInTheDocument();
     expect(screen.queryByText(/private local path/i)).not.toBeInTheDocument();
   });
 });

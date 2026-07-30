@@ -22,6 +22,11 @@ export default defineConfig({
   renderer: {
     root: '.',
     plugins: [react()],
+    server: {
+      watch: {
+        ignored: ['**/manual-fixtures/**', '**/release/**', '**/out/**'],
+      },
+    },
     build: {
       rollupOptions: {
         input: resolve(__dirname, 'index.html'),

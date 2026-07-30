@@ -3,7 +3,7 @@
 Drumulizer uses semantic versioning during staged product development.
 
 - v0.1.0: Project foundation and visual system
-- v0.2.0: Audio import and waveform playback
+- v0.2.0: Audio import, waveform display, and playback
 - v0.3.0: Manual slice editor
 - v0.4.0: Offline onset detection
 - v0.5.0: Slice analysis and role scoring
