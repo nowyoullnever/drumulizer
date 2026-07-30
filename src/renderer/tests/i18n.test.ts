@@ -21,7 +21,7 @@ describe('i18n dictionaries', () => {
   });
 
   it('formats placeholders and falls back through the central translator', () => {
-    expect(formatTranslation('v{version}', { version: '0.3.0' })).toBe('v0.3.0');
+    expect(formatTranslation('v{version}', { version: '0.4.0' })).toBe('v0.4.0');
     expect(translate('en', 'app.about')).toBe('About');
   });
 

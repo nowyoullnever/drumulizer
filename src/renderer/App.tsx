@@ -5,6 +5,17 @@ import { audioRuntimeStore } from './audio/runtimeStore';
 import { AudioImportError, decodeImportedAudio } from './audio/importAudio';
 import { PlaybackEngine } from './audio/playbackEngine';
 import { buildWaveformPeaksInWorker } from './audio/peakWorkerClient';
+import { OnsetWorkerClient } from './audio/onset/onsetWorkerClient';
+import {
+  DEFAULT_ONSET_MINIMUM_GAP_MS,
+  DEFAULT_ONSET_SENSITIVITY,
+  clampOnsetSettings,
+  onsetSettingsKey,
+  type OnsetApplyMode,
+  type OnsetApplySummary,
+  type OnsetDetectionSettings,
+  type OnsetPreview,
+} from './audio/onset/onsetTypes';
 import type {
   AudioImportState,
   AudioSourceMetadata,
@@ -13,6 +24,7 @@ import type {
 } from './audio/types';
 import { clamp } from './audio/time';
 import { AppStatusModule } from './components/AppStatusModule';
+import { AnalysisPanel } from './components/AnalysisPanel';
 import { ErrorBanner } from './components/ErrorBanner';
 import { LanguageSwitch } from './components/LanguageSwitch';
 import { PatternBackground } from './components/PatternBackground';
@@ -31,6 +43,7 @@ import { errorKeyForCode, type UserFacingErrorCode } from './i18n/errorMessages'
 import { useI18n } from './i18n/useI18n';
 import {
   addMarker,
+  applyDetectedCandidates,
   deleteMarker,
   deriveBoundaries,
   deriveSlices,
@@ -61,6 +74,7 @@ const fallbackInfo: DrumulizerAppInfo = {
 };
 
 const playbackEngine = new PlaybackEngine();
+const onsetWorkerClient = new OnsetWorkerClient();
 
 const initialSliceState: SliceHistoryState = {
   markers: [],
@@ -123,6 +137,15 @@ export function App() {
   const [zeroCrossingEnabled, setZeroCrossingEnabled] = useState(true);
   const [customDivision, setCustomDivision] = useState(8);
   const [prerollMs, setPrerollMs] = useState(0);
+  const [onsetSettings, setOnsetSettings] = useState<OnsetDetectionSettings>({
+    sensitivity: DEFAULT_ONSET_SENSITIVITY,
+    minimumGapMs: DEFAULT_ONSET_MINIMUM_GAP_MS,
+  });
+  const [onsetPreview, setOnsetPreview] = useState<OnsetPreview | null>(null);
+  const [onsetApplyMode, setOnsetApplyMode] = useState<OnsetApplyMode>('replace');
+  const [onsetProgress, setOnsetProgress] = useState<number | null>(null);
+  const [onsetAnalyzing, setOnsetAnalyzing] = useState(false);
+  const [onsetApplySummary, setOnsetApplySummary] = useState<OnsetApplySummary | null>(null);
   const [inlineSliceError, setInlineSliceError] = useState<SliceEditErrorCode | null>(null);
   const [inlineSliceMessage, setInlineSliceMessage] = useState<string | null>(null);
   const [sliceHistory, setSliceHistory] = useState<SliceHistory>(() =>
@@ -131,6 +154,8 @@ export function App() {
   const [zoom, setZoom] = useState(1);
   const [viewportStart, setViewportStart] = useState(0);
   const importGeneration = useRef(0);
+  const onsetGeneration = useRef(0);
+  const activeOnsetRequestId = useRef<string | null>(null);
   const animationFrame = useRef<number | null>(null);
   const dragStartState = useRef<SliceHistoryState | null>(null);
   const appInfo = useMemo(() => window.drumulizer?.getAppInfo() ?? fallbackInfo, []);
@@ -141,6 +166,14 @@ export function App() {
   const viewportDuration = duration > 0 ? duration / zoom : 1;
   const viewportEnd = Math.min(duration, viewportStart + viewportDuration);
   const markers = sliceHistory.present.markers;
+  const previewCandidates = useMemo(() => {
+    const preview = onsetPreview;
+    if (!preview) return [];
+    return preview.sourceId === metadata?.id &&
+      preview.settingsKey === onsetSettingsKey(onsetSettings)
+      ? preview.candidates
+      : [];
+  }, [metadata?.id, onsetPreview, onsetSettings]);
   const boundaries = useMemo(
     () => deriveBoundaries(markers, sourceLengthSamples),
     [markers, sourceLengthSamples],
@@ -171,6 +204,20 @@ export function App() {
     setZoom(1);
     setViewportStart(0);
     if (newDuration <= 0) setPeaks(null);
+  }, []);
+
+  const discardOnsetPreview = useCallback(() => {
+    setOnsetPreview(null);
+    setOnsetProgress(null);
+    setOnsetApplySummary(null);
+  }, []);
+
+  const cancelOnsetAnalysis = useCallback(() => {
+    onsetGeneration.current += 1;
+    activeOnsetRequestId.current = null;
+    onsetWorkerClient.cancel();
+    setOnsetAnalyzing(false);
+    setOnsetProgress(null);
   }, []);
 
   const replaceSliceHistory = useCallback((next: SliceHistoryState, push = true) => {
@@ -224,6 +271,7 @@ export function App() {
       setErrorMessage(null);
       setStatus('processing');
       setImportState({ status: 'reading', fileName: label });
+      cancelOnsetAnalysis();
 
       const result = await resultPromise;
       if (generation !== importGeneration.current) return;
@@ -248,6 +296,7 @@ export function App() {
 
         playbackEngine.clear();
         audioRuntimeStore.set(decoded);
+        discardOnsetPreview();
         setMetadata(decoded.metadata);
         setPeaks(builtPeaks);
         setPlayback(playbackEngine.load(decoded.originalBuffer));
@@ -259,7 +308,15 @@ export function App() {
         applyImportError(error instanceof AudioImportError ? error.code : 'UNKNOWN_IMPORT');
       }
     },
-    [applyImportError, initializeSlicesForSource, metadata, resetViewport, t],
+    [
+      applyImportError,
+      cancelOnsetAnalysis,
+      discardOnsetPreview,
+      initializeSlicesForSource,
+      metadata,
+      resetViewport,
+      t,
+    ],
   );
 
   const openFile = useCallback(() => {
@@ -274,6 +331,8 @@ export function App() {
 
   const clearSource = useCallback(() => {
     importGeneration.current += 1;
+    cancelOnsetAnalysis();
+    discardOnsetPreview();
     playbackEngine.clear();
     audioRuntimeStore.clear();
     setMetadata(null);
@@ -286,7 +345,105 @@ export function App() {
     setInlineSliceError(null);
     setInlineSliceMessage(null);
     resetViewport(0);
-  }, [resetViewport]);
+  }, [cancelOnsetAnalysis, discardOnsetPreview, resetViewport]);
+
+  const updateOnsetSettings = useCallback(
+    (settings: OnsetDetectionSettings) => {
+      setOnsetSettings(clampOnsetSettings(settings));
+      discardOnsetPreview();
+    },
+    [discardOnsetPreview],
+  );
+
+  const analyzeOnsets = useCallback(() => {
+    const runtime = audioRuntimeStore.get();
+    if (!metadata || !runtime) return;
+    cancelOnsetAnalysis();
+    discardOnsetPreview();
+    const requestId = `onset-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const settings = clampOnsetSettings(onsetSettings);
+    const settingsKey = onsetSettingsKey(settings);
+    const generation = onsetGeneration.current + 1;
+    onsetGeneration.current = generation;
+    activeOnsetRequestId.current = requestId;
+    setOnsetAnalyzing(true);
+    setStatus('processing');
+    setErrorMessage(null);
+
+    void onsetWorkerClient
+      .analyze(
+        {
+          requestId,
+          monoData: runtime.analysisMonoData,
+          originalSampleRate: metadata.sampleRate,
+          settings,
+        },
+        (progress) => {
+          if (generation !== onsetGeneration.current) return;
+          setOnsetProgress(Math.max(0, Math.min(100, Math.round(progress))));
+        },
+      )
+      .then((result) => {
+        if (
+          generation !== onsetGeneration.current ||
+          activeOnsetRequestId.current !== result.requestId ||
+          metadata.id !== audioRuntimeStore.get()?.metadata.id ||
+          settingsKey !== onsetSettingsKey(result.settings)
+        ) {
+          return;
+        }
+        setOnsetPreview({
+          sourceId: metadata.id,
+          requestId: result.requestId,
+          settingsKey,
+          candidates: result.candidates,
+          capped: result.capped,
+          reason: result.reason,
+        });
+        setOnsetApplySummary(null);
+        setOnsetAnalyzing(false);
+        setOnsetProgress(null);
+        setStatus('ready');
+      })
+      .catch(() => {
+        if (generation !== onsetGeneration.current) return;
+        setOnsetAnalyzing(false);
+        setOnsetProgress(null);
+        setErrorMessage(t('analysis.failed'));
+        setStatus('error');
+      });
+  }, [cancelOnsetAnalysis, discardOnsetPreview, metadata, onsetSettings, t]);
+
+  const applyOnsetPreview = useCallback(() => {
+    if (!metadata || previewCandidates.length === 0) return;
+    if (!onsetPreview || onsetPreview.sourceId !== metadata.id) return;
+    const result = applyDetectedCandidates({
+      markers,
+      candidates: previewCandidates,
+      mode: onsetApplyMode,
+      sourceLengthSamples,
+      sampleRate,
+    });
+    setSliceHistory((history) =>
+      pushSliceHistory(history, {
+        markers: result.markers,
+        selectedMarkerId: result.selectedMarkerId,
+        selectedSliceId: result.selectedSliceId,
+      }),
+    );
+    setOnsetApplySummary(result.summary);
+    setOnsetPreview(null);
+    setStatus('ready');
+    setPlayback(playbackEngine.stopSliceAudition());
+  }, [
+    markers,
+    metadata,
+    onsetApplyMode,
+    onsetPreview,
+    previewCandidates,
+    sampleRate,
+    sourceLengthSamples,
+  ]);
 
   const setViewportSafely = useCallback(
     (start: number, nextZoom = zoom) => {
@@ -520,6 +677,7 @@ export function App() {
     animationFrame.current = window.requestAnimationFrame(tick);
     return () => {
       if (animationFrame.current) window.cancelAnimationFrame(animationFrame.current);
+      onsetWorkerClient.cancel();
       playbackEngine.clear();
     };
   }, []);
@@ -704,10 +862,21 @@ export function App() {
           </PixelPanel>
 
           <PixelPanel title={t('panel.analysis')} accent="violet">
-            <div className="status-stack status-stack--compact">
-              <strong className="muted-label">{t('analysis.disabledLabel')}</strong>
-              <p>{t('analysis.disabled')}</p>
-            </div>
+            <AnalysisPanel
+              hasSource={Boolean(metadata) && !isBusy}
+              settings={onsetSettings}
+              analyzing={onsetAnalyzing}
+              progress={onsetProgress}
+              candidates={previewCandidates}
+              applyMode={onsetApplyMode}
+              resultReason={onsetPreview?.reason ?? null}
+              applySummary={onsetApplySummary}
+              onSettingsChange={updateOnsetSettings}
+              onAnalyze={analyzeOnsets}
+              onApplyModeChange={setOnsetApplyMode}
+              onApply={applyOnsetPreview}
+              onDiscard={discardOnsetPreview}
+            />
           </PixelPanel>
         </aside>
 
@@ -739,6 +908,7 @@ export function App() {
               boundaries={boundaries}
               selectedMarkerId={sliceHistory.present.selectedMarkerId}
               selectedSlice={selectedSlice}
+              previewCandidates={previewCandidates}
               tool={tool}
               onSeek={seek}
               onPan={(delta) => setViewportSafely(viewportStart + delta)}

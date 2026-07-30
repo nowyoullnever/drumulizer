@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { PlaybackSnapshot, WaveformPeaks } from '../audio/types';
+import type { OnsetCandidate } from '../audio/onset/onsetTypes';
 import { clamp } from '../audio/time';
 import { sourceEndBoundaryId, sourceStartBoundaryId } from '../slice/sliceModel';
 import type { SliceBoundary, SliceRegion, WaveformTool } from '../slice/types';
@@ -15,6 +16,7 @@ interface WaveformCanvasProps {
   boundaries: SliceBoundary[];
   selectedMarkerId: string | null;
   selectedSlice: SliceRegion | null;
+  previewCandidates: OnsetCandidate[];
   tool: WaveformTool;
   onSeek: (time: number) => void;
   onPan: (deltaSeconds: number) => void;
@@ -38,6 +40,7 @@ export function WaveformCanvas({
   boundaries,
   selectedMarkerId,
   selectedSlice,
+  previewCandidates,
   tool,
   onSeek,
   onPan,
@@ -216,6 +219,32 @@ export function WaveformCanvas({
       }
     });
 
+    previewCandidates.forEach((candidate) => {
+      const seconds = candidate.sampleIndex / sampleRate;
+      if (seconds < viewportStart || seconds > viewportEnd) return;
+      const x = Math.round((seconds - viewportStart) / secondsPerPixel);
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = 'rgba(89, 55, 113, 0.76)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, rect.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(246, 237, 207, 0.9)';
+      ctx.strokeStyle = '#593771';
+      ctx.beginPath();
+      ctx.moveTo(x, 2);
+      ctx.lineTo(x + 6, 8);
+      ctx.lineTo(x, 14);
+      ctx.lineTo(x - 6, 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    });
+
     const playheadX = Math.round((playback.positionSeconds - viewportStart) / secondsPerPixel);
     if (playheadX >= 0 && playheadX <= rect.width) {
       ctx.fillStyle = '#27867b';
@@ -225,6 +254,7 @@ export function WaveformCanvas({
     boundaries,
     peaks,
     playback.positionSeconds,
+    previewCandidates,
     sampleRate,
     selectedMarkerId,
     selectedSlice,

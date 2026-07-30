@@ -1,4 +1,4 @@
-export type SliceMarkerOrigin = 'manual' | 'equal-division';
+export type SliceMarkerOrigin = 'manual' | 'equal-division' | 'detected';
 
 export interface SliceMarker {
   id: string;
