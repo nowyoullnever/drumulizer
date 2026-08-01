@@ -8,6 +8,10 @@ import {
   createDefaultGeneratorSettings,
   createDefaultMutationState,
 } from '../sequencer/generator/generatorTypes';
+import {
+  createDefaultIDMTransformMutationState,
+  createDefaultIDMTransformSettings,
+} from '../sequencer/transform/idmTransform';
 import { createDefaultPattern, paintEvent } from '../sequencer/patternModel';
 import type { SequencerSliceContext } from '../sequencer/types';
 import type { SliceRegion } from '../slice/types';
@@ -58,9 +62,13 @@ const renderSequencer = (overrides: Partial<Parameters<typeof SequencerPanel>[0]
     generatorReady: true,
     generatorReason: null,
     generationSummary: null,
+    idmSettings: createDefaultIDMTransformSettings(),
+    idmMutationState: createDefaultIDMTransformMutationState(),
+    idmSummary: null,
     onToolChange: vi.fn(),
     onBpmChange: vi.fn(),
     onBarsChange: vi.fn(),
+    onSwingChange: vi.fn(),
     onLoopChange: vi.fn(),
     onPlay: vi.fn(),
     onPause: vi.fn(),
@@ -91,6 +99,10 @@ const renderSequencer = (overrides: Partial<Parameters<typeof SequencerPanel>[0]
     onRandomizeSeed: vi.fn(),
     onCopySeed: vi.fn(),
     onResetGeneratorSettings: vi.fn(),
+    onIDMSettingsChange: vi.fn(),
+    onApplyIDMTransform: vi.fn(),
+    onMutateIDMTransform: vi.fn(),
+    onResetIDMTransform: vi.fn(),
     onToggleSelectedEventLock: vi.fn(),
     onLockAllEvents: vi.fn(),
     onUnlockAllEvents: vi.fn(),

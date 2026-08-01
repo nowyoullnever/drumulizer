@@ -10,6 +10,10 @@ The Slice Library keeps the same bordered modular pixel language while becoming 
 
 The Pattern Generator is a compact control surface, not a landing section. Seed, Density, Variation, Breakage, Generation Mode, Generation Scope, Generate, Regenerate, and Mutate live near the Sequencer grid. Generated, mutated, manual, Event-locked, and Lane-locked states must be visible without replacing the lane role colors.
 
+## v0.8.0 IDM Transform
+
+IDM Transform controls remain a dense sequencer work surface. Transformation indicators must supplement existing lane colors rather than replacing them. Probability, Timing, Ratchet, Reverse, Granular, and lock states must not rely on color alone.
+
 ## Palette
 
 Raw colors live in `src/renderer/styles/tokens.css`: paper, paper-light, ink, ink-soft, tomato, orange, mustard, cobalt, teal, violet, success, warning, and danger.

@@ -1,8 +1,8 @@
 # Drumulizer
 
-Drumulizer is a Windows desktop application for building a fully local, sample-based IDM drum-loop workflow. Version `0.7.0` adds a deterministic, rule-based Pattern Generator that uses current Slice analysis and role-suitability scores to generate, regenerate, and mutate LOW/MID/HIGH/TEXTURE sequencer patterns.
+Drumulizer is a Windows desktop application for building a fully local, sample-based IDM drum-loop workflow. Version `0.8.0` adds deterministic Event transformations: Probability, Swing, tempo-relative Microtiming, Ratchet, Reverse, selective Granular Event playback, and an IDM Transform engine.
 
-Current status: local audio slice workspace with manual editing, offline onset assistance, slice analysis, Slice Library curation, manual pattern playback, Seed-reproducible Pattern generation, Density/Variation/Breakage controls, Event locks, Lane generation locks, and manual-event preservation. It does not use AI, machine learning, automatic drum classification, BPM detection, probability playback, project saving, MIDI, or audio export.
+Current status: local audio slice workspace with manual editing, offline onset assistance, slice analysis, Slice Library curation, manual pattern playback, Seed-reproducible Pattern generation, Density/Variation/Breakage controls, Event locks, Lane generation locks, Event Probability, Pattern Swing, Microtiming, Ratchet, Reverse, Granular Burst, and deterministic IDM Transform. It does not use AI, machine learning, automatic drum classification, BPM detection, project saving, MIDI, or audio export.
 
 ## Offline Principle
 
@@ -36,6 +36,7 @@ npm run dev
 - `npm run verify:onset`: run typecheck and focused onset-analysis tests.
 - `npm run test:sequencer`: run focused sequencer model, scheduling, and UI tests.
 - `npm run test:generator`: run focused PRNG, generator, grammar, mutation, evaluation, and generator UI tests.
+- `npm run test:idm`: run focused Probability, Timing, Ratchet, Reverse, Granular, IDM Transform, and transform evaluation tests.
 - `npm run build`: build production main, preload, and renderer assets.
 - `npm run dist:win`: create Windows distributables with electron-builder.
 
@@ -77,10 +78,12 @@ The v0.6.0 sequencer introduced manual event placement. v0.7.0 adds a determinis
 
 The v0.7.0 Pattern Generator requires current Slice analysis. It normalizes the visible Seed, uses an internal deterministic PRNG, builds lane-specific weighted Slice pools, applies lane grammar, and produces ordinary Sequencer Events with `manual`, `generated`, or `mutated` origin. Generate preserves manual Events by default, Regenerate can replace unlocked Events, and Mutate advances a deterministic mutation index. Event locks and Lane generation locks protect useful work while manual editing remains available when transport is stopped.
 
+The v0.8.0 IDM Transform layer decorates existing Events without changing Lane, Step, or Slice assignment. Pattern Swing delays odd 16th-note steps. Event Microtiming is stored as a fraction of one Step and scales with BPM. Probability is evaluated deterministically once per Event per Pattern loop from the visible Seed, Event ID, and loop index. Ratchet creates bounded subtriggers inside the Step. Reverse uses a bounded Slice-specific reversed-buffer cache. Granular mode creates short deterministic Event bursts with Grain Size, Count, Position, Spray, and Pitch Jitter controls.
+
 Preview candidates can be selected on the waveform, navigated with Previous/Next buttons or `,` and `.` shortcuts, and auditioned with a short 20ms pre-roll and 120ms post window. Candidate confidence, dominant band, and supporting feature count are shown as diagnostics, not as instrument labels.
 
 Replace mode substitutes editable internal markers with detected markers. Merge mode preserves existing valid manual, equal-division, and detected markers while skipping candidates that conflict with slice-duration rules. Each apply operation creates one undoable history entry.
 
 ## Planned Direction
 
-Future versions will add HPSS-derived slices, granular processing, project saves, and WAV/stem export.
+Future versions will add HPSS-derived slices, project saves, and WAV/stem export.

@@ -3,15 +3,24 @@ import {
   MAX_EVENT_VELOCITY,
   MAX_PATTERN_BARS,
   MAX_PATTERN_BPM,
+  MAX_PATTERN_SWING,
   MIN_EVENT_PITCH_SEMITONES,
   MIN_EVENT_VELOCITY,
   MIN_PATTERN_BARS,
   MIN_PATTERN_BPM,
+  MIN_PATTERN_SWING,
   SEQUENCER_STEPS_PER_BAR,
 } from '../../shared/constants/sequencer';
 import { formatDuration } from '../audio/time';
-import { eventLocation, findEventAt, totalPatternSteps } from '../sequencer/patternModel';
+import {
+  DEFAULT_EVENT_TRANSFORM,
+  eventLocation,
+  findEventAt,
+  totalPatternSteps,
+} from '../sequencer/patternModel';
 import type {
+  IDMTransformMutationState,
+  IDMTransformSettings,
   SequencerEvent,
   SequencerLaneId,
   SequencerPattern,
@@ -22,6 +31,7 @@ import type {
   PatternMutationState,
 } from '../sequencer/types';
 import type { GenerationSummary } from '../sequencer/generator/generatorTypes';
+import type { IDMTransformSummary } from '../sequencer/transform/idmTransform';
 import type { KeyboardEvent } from 'react';
 import { sequencerLaneOrder } from '../sequencer/types';
 import { useI18n } from '../i18n/useI18n';
@@ -46,9 +56,13 @@ interface SequencerPanelProps {
   generatorReady: boolean;
   generatorReason: string | null;
   generationSummary: GenerationSummary | null;
+  idmSettings: IDMTransformSettings;
+  idmMutationState: IDMTransformMutationState;
+  idmSummary: IDMTransformSummary | null;
   onToolChange: (tool: SequencerTool) => void;
   onBpmChange: (bpm: number) => void;
   onBarsChange: (bars: number) => void;
+  onSwingChange: (swing: number) => void;
   onLoopChange: (enabled: boolean) => void;
   onPlay: () => void;
   onPause: () => void;
@@ -69,7 +83,7 @@ interface SequencerPanelProps {
   canRedo: boolean;
   onUpdateEvent: (
     eventId: string,
-    patch: Partial<Pick<SequencerEvent, 'velocity' | 'pan' | 'pitchSemitones'>>,
+    patch: Partial<Pick<SequencerEvent, 'velocity' | 'pan' | 'pitchSemitones' | 'transform'>>,
   ) => void;
   onReplaceSelectedEvent: () => void;
   onResetSelectedEvent: () => void;
@@ -82,6 +96,10 @@ interface SequencerPanelProps {
   onRandomizeSeed: () => void;
   onCopySeed: () => void;
   onResetGeneratorSettings: () => void;
+  onIDMSettingsChange: (settings: IDMTransformSettings) => void;
+  onApplyIDMTransform: () => void;
+  onMutateIDMTransform: () => void;
+  onResetIDMTransform: () => void;
   onToggleSelectedEventLock: () => void;
   onLockAllEvents: () => void;
   onUnlockAllEvents: () => void;
@@ -93,6 +111,21 @@ const roleLetter: Record<string, string> = {
   high: 'H',
   texture: 'T',
   unclassified: '?',
+};
+
+const eventTransformBadges = (event: SequencerEvent | null): string[] => {
+  if (!event) return [];
+  const badges: string[] = [];
+  if (event.transform.probability < DEFAULT_EVENT_TRANSFORM.probability) badges.push('%');
+  if (event.transform.timingOffsetSteps !== DEFAULT_EVENT_TRANSFORM.timingOffsetSteps) {
+    badges.push(event.transform.timingOffsetSteps > 0 ? '+' : '-');
+  }
+  if (event.transform.ratchetCount > DEFAULT_EVENT_TRANSFORM.ratchetCount) {
+    badges.push(`x${event.transform.ratchetCount}`);
+  }
+  if (event.transform.reverse) badges.push('R');
+  if (event.transform.playbackMode === 'granular') badges.push('G');
+  return badges;
 };
 
 export function SequencerPanel({
@@ -112,9 +145,13 @@ export function SequencerPanel({
   generatorReady,
   generatorReason,
   generationSummary,
+  idmSettings,
+  idmMutationState,
+  idmSummary,
   onToolChange,
   onBpmChange,
   onBarsChange,
+  onSwingChange,
   onLoopChange,
   onPlay,
   onPause,
@@ -145,6 +182,10 @@ export function SequencerPanel({
   onRandomizeSeed,
   onCopySeed,
   onResetGeneratorSettings,
+  onIDMSettingsChange,
+  onApplyIDMTransform,
+  onMutateIDMTransform,
+  onResetIDMTransform,
   onToggleSelectedEventLock,
   onLockAllEvents,
   onUnlockAllEvents,
@@ -230,6 +271,15 @@ export function SequencerPanel({
             disabled={locked}
             onChange={(event) => onBarsChange(Number(event.currentTarget.value))}
           />
+          <PixelSlider
+            label={t('idm.swing')}
+            min={MIN_PATTERN_SWING}
+            max={MAX_PATTERN_SWING}
+            step={1}
+            value={Math.round(pattern.swing)}
+            disabled={locked}
+            onChange={(event) => onSwingChange(Number(event.currentTarget.value))}
+          />
         </div>
 
         <div className="sequencer-tools" role="group" aria-label={t('sequencer.tools')}>
@@ -262,6 +312,17 @@ export function SequencerPanel({
         onRandomizeSeed={onRandomizeSeed}
         onCopySeed={onCopySeed}
         onResetSettings={onResetGeneratorSettings}
+      />
+
+      <IDMTransformPanel
+        settings={idmSettings}
+        mutationState={idmMutationState}
+        summary={idmSummary}
+        locked={locked}
+        onSettingsChange={onIDMSettingsChange}
+        onApply={onApplyIDMTransform}
+        onMutate={onMutateIDMTransform}
+        onReset={onResetIDMTransform}
       />
 
       <div className="active-slice-module">
@@ -368,17 +429,21 @@ export function SequencerPanel({
                   const playhead =
                     stepIndex === transport.currentStep && transport.status === 'playing';
                   const focused = focusedLaneId === laneId && focusedStepIndex === stepIndex;
+                  const transformBadges = eventTransformBadges(event ?? null);
+                  const transformed = transformBadges.length > 0;
                   return (
                     <button
                       key={`${laneId}-${stepIndex}`}
                       type="button"
                       role="gridcell"
-                      className={`sequencer-step sequencer-step--${laneId}${event ? ' sequencer-step--occupied' : ''}${event ? ` sequencer-step--origin-${event.origin}` : ''}${event?.locked ? ' sequencer-step--locked' : ''}${selected ? ' sequencer-step--selected' : ''}${playhead ? ' sequencer-step--playhead' : ''}${!audible ? ' sequencer-step--muted' : ''}${mismatch ? ' sequencer-step--mismatch' : ''}${focused ? ' sequencer-step--focused' : ''}`}
+                      className={`sequencer-step sequencer-step--${laneId}${event ? ' sequencer-step--occupied' : ''}${event ? ` sequencer-step--origin-${event.origin}` : ''}${transformed ? ' sequencer-step--transformed' : ''}${event?.locked ? ' sequencer-step--locked' : ''}${selected ? ' sequencer-step--selected' : ''}${playhead ? ' sequencer-step--playhead' : ''}${!audible ? ' sequencer-step--muted' : ''}${mismatch ? ' sequencer-step--mismatch' : ''}${focused ? ' sequencer-step--focused' : ''}`}
                       aria-selected={selected}
                       aria-label={t('sequencer.stepLabel', {
                         lane: t(`sliceRole.${laneId}`),
                         step: stepIndex + 1,
-                        state: event ? t('sequencer.occupied') : t('sequencer.empty'),
+                        state: event
+                          ? `${t('sequencer.occupied')}${transformed ? `, ${transformBadges.join(' ')}` : ''}`
+                          : t('sequencer.empty'),
                       })}
                       onFocus={() => onFocusCell(laneId, stepIndex)}
                       onClick={() => onGridAction(laneId, stepIndex)}
@@ -387,6 +452,7 @@ export function SequencerPanel({
                         <>
                           <span>{context ? context.slice.index + 1 : '!'}</span>
                           <small>{context ? roleLetter[context.effectiveRole] : '!'}</small>
+                          {transformed ? <em>{transformBadges.slice(0, 2).join('')}</em> : null}
                           <i style={{ height: `${Math.max(18, event.velocity * 100)}%` }} />
                         </>
                       ) : null}
@@ -590,6 +656,119 @@ function PatternGeneratorPanel({
   );
 }
 
+function IDMTransformPanel({
+  settings,
+  mutationState,
+  summary,
+  locked,
+  onSettingsChange,
+  onApply,
+  onMutate,
+  onReset,
+}: {
+  settings: IDMTransformSettings;
+  mutationState: IDMTransformMutationState;
+  summary: IDMTransformSummary | null;
+  locked: boolean;
+  onSettingsChange: (settings: IDMTransformSettings) => void;
+  onApply: () => void;
+  onMutate: () => void;
+  onReset: () => void;
+}) {
+  const { t } = useI18n();
+  const update = (patch: Partial<IDMTransformSettings>): void =>
+    onSettingsChange({ ...settings, ...patch });
+  return (
+    <div className="idm-transform" aria-label={t('idm.title')}>
+      <div className="pattern-generator__header">
+        <strong>{t('idm.title')}</strong>
+        <span>{t('idm.deterministic')}</span>
+      </div>
+      <div className="pattern-generator__sliders">
+        <PixelSlider
+          label={t('idm.intensity')}
+          min={0}
+          max={100}
+          step={1}
+          value={settings.intensity}
+          onChange={(event) => update({ intensity: Number(event.currentTarget.value) })}
+        />
+      </div>
+      <div className="pattern-generator__selects">
+        <label>
+          <span>{t('generator.mode')}</span>
+          <select
+            value={settings.mode}
+            onChange={(event) =>
+              update({ mode: event.currentTarget.value as IDMTransformSettings['mode'] })
+            }
+          >
+            <option value="preserve-manual">{t('generator.mode.preserveManual')}</option>
+            <option value="replace-unlocked">{t('generator.mode.replaceUnlocked')}</option>
+          </select>
+        </label>
+        <label>
+          <span>{t('generator.scope')}</span>
+          <select
+            value={settings.scope}
+            onChange={(event) =>
+              update({ scope: event.currentTarget.value as IDMTransformSettings['scope'] })
+            }
+          >
+            <option value="all">{t('generator.scope.all')}</option>
+            {sequencerLaneOrder.map((laneId) => (
+              <option value={laneId} key={laneId}>
+                {t(`sliceRole.${laneId}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="idm-transform__toggles">
+        {(
+          [
+            ['probabilityEnabled', 'idm.probability'],
+            ['timingEnabled', 'idm.timing'],
+            ['ratchetEnabled', 'idm.ratchet'],
+            ['reverseEnabled', 'idm.reverse'],
+            ['granularEnabled', 'idm.granular'],
+            ['applyAfterGeneration', 'idm.afterGeneration'],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            <input
+              type="checkbox"
+              checked={settings[key]}
+              onChange={(event) => update({ [key]: event.currentTarget.checked })}
+            />
+            <span>{t(label)}</span>
+          </label>
+        ))}
+      </div>
+      <div className="pattern-generator__actions">
+        <PixelButton onClick={onApply} disabled={locked}>
+          {t('idm.apply')}
+        </PixelButton>
+        <PixelButton onClick={onMutate} disabled={locked}>
+          {t('idm.mutate')}
+        </PixelButton>
+        <PixelButton onClick={onReset} disabled={locked}>
+          {t('idm.reset')}
+        </PixelButton>
+      </div>
+      {summary ? (
+        <p className="generator-summary">
+          {t(summary.messageKey as Parameters<typeof t>[0], {
+            changed: summary.changed,
+            preserved: summary.preserved,
+            mutation: mutationState.mutationIndex,
+          })}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function EventInspector({
   event,
   context,
@@ -713,6 +892,190 @@ function EventInspector({
       <p className="muted-label">
         {t('sequencer.masterGainPreview', { value: Math.round(masterGain * 100) })}
       </p>
+      <div className="event-transform-controls">
+        <strong>{t('idm.eventTransform')}</strong>
+        <PixelSlider
+          label={t('idm.probability')}
+          min={0}
+          max={100}
+          step={1}
+          value={Math.round(event.transform.probability * 100)}
+          disabled={locked}
+          onChange={(change) =>
+            onUpdateEvent(event.id, {
+              transform: {
+                ...event.transform,
+                probability: Number(change.currentTarget.value) / 100,
+              },
+            })
+          }
+        />
+        <PixelSlider
+          label={t('idm.microtiming')}
+          min={-45}
+          max={45}
+          step={1}
+          value={Math.round(event.transform.timingOffsetSteps * 100)}
+          disabled={locked}
+          onChange={(change) =>
+            onUpdateEvent(event.id, {
+              transform: {
+                ...event.transform,
+                timingOffsetSteps: Number(change.currentTarget.value) / 100,
+              },
+            })
+          }
+        />
+        <PixelSlider
+          label={t('idm.ratchetCount')}
+          min={1}
+          max={4}
+          step={1}
+          value={event.transform.ratchetCount}
+          disabled={locked}
+          onChange={(change) =>
+            onUpdateEvent(event.id, {
+              transform: {
+                ...event.transform,
+                ratchetCount: Number(change.currentTarget.value),
+              },
+            })
+          }
+        />
+        <PixelSlider
+          label={t('idm.ratchetDecay')}
+          min={0}
+          max={100}
+          step={1}
+          value={Math.round(event.transform.ratchetDecay * 100)}
+          disabled={locked}
+          onChange={(change) =>
+            onUpdateEvent(event.id, {
+              transform: {
+                ...event.transform,
+                ratchetDecay: Number(change.currentTarget.value) / 100,
+              },
+            })
+          }
+        />
+        <div className="idm-transform__toggles">
+          <label>
+            <input
+              type="checkbox"
+              checked={event.transform.reverse}
+              disabled={locked}
+              onChange={(change) =>
+                onUpdateEvent(event.id, {
+                  transform: { ...event.transform, reverse: change.currentTarget.checked },
+                })
+              }
+            />
+            <span>{t('idm.reverse')}</span>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={event.transform.playbackMode === 'granular'}
+              disabled={locked}
+              onChange={(change) =>
+                onUpdateEvent(event.id, {
+                  transform: {
+                    ...event.transform,
+                    playbackMode: change.currentTarget.checked ? 'granular' : 'slice',
+                  },
+                })
+              }
+            />
+            <span>{t('idm.granular')}</span>
+          </label>
+        </div>
+        <PixelSlider
+          label={t('idm.grainSize')}
+          min={10}
+          max={120}
+          step={1}
+          value={event.transform.grainSizeMs}
+          disabled={locked || event.transform.playbackMode !== 'granular'}
+          onChange={(change) =>
+            onUpdateEvent(event.id, {
+              transform: {
+                ...event.transform,
+                grainSizeMs: Number(change.currentTarget.value),
+              },
+            })
+          }
+        />
+        <PixelSlider
+          label={t('idm.grainCount')}
+          min={2}
+          max={8}
+          step={1}
+          value={event.transform.grainCount}
+          disabled={locked || event.transform.playbackMode !== 'granular'}
+          onChange={(change) =>
+            onUpdateEvent(event.id, {
+              transform: {
+                ...event.transform,
+                grainCount: Number(change.currentTarget.value),
+              },
+            })
+          }
+        />
+        <PixelSlider
+          label={t('idm.grainPosition')}
+          min={0}
+          max={100}
+          step={1}
+          value={Math.round(event.transform.grainPosition * 100)}
+          disabled={locked || event.transform.playbackMode !== 'granular'}
+          onChange={(change) =>
+            onUpdateEvent(event.id, {
+              transform: {
+                ...event.transform,
+                grainPosition: Number(change.currentTarget.value) / 100,
+              },
+            })
+          }
+        />
+        <PixelSlider
+          label={t('idm.grainSpray')}
+          min={0}
+          max={100}
+          step={1}
+          value={Math.round(event.transform.grainSpray * 100)}
+          disabled={locked || event.transform.playbackMode !== 'granular'}
+          onChange={(change) =>
+            onUpdateEvent(event.id, {
+              transform: {
+                ...event.transform,
+                grainSpray: Number(change.currentTarget.value) / 100,
+              },
+            })
+          }
+        />
+        <PixelSlider
+          label={t('idm.grainPitchJitter')}
+          min={0}
+          max={12}
+          step={1}
+          value={event.transform.grainPitchJitterSemitones}
+          disabled={locked || event.transform.playbackMode !== 'granular'}
+          onChange={(change) =>
+            onUpdateEvent(event.id, {
+              transform: {
+                ...event.transform,
+                grainPitchJitterSemitones: Number(change.currentTarget.value),
+              },
+            })
+          }
+        />
+        <PixelButton
+          onClick={() => onUpdateEvent(event.id, { transform: DEFAULT_EVENT_TRANSFORM })}
+          disabled={locked}
+        >
+          {t('idm.resetEvent')}
+        </PixelButton>
+      </div>
       <div className="event-inspector__actions">
         <PixelButton onClick={onAudition} disabled={locked || !context}>
           {t('sequencer.auditionEvent')}

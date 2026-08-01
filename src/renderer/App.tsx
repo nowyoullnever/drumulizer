@@ -32,6 +32,7 @@ import {
   setLaneState,
   setPatternBars,
   setPatternBpm,
+  setPatternSwing,
   updateEvent,
 } from './sequencer/patternModel';
 import {
@@ -50,7 +51,17 @@ import {
 import { generatePattern } from './sequencer/generator/generatePattern';
 import { mutatePattern } from './sequencer/generator/mutatePattern';
 import { generatorPrerequisites } from './sequencer/generator/generationDiagnostics';
+import {
+  applyIDMTransform,
+  createDefaultIDMTransformMutationState,
+  createDefaultIDMTransformSettings,
+  normalizeIDMTransformSettings,
+  resetIDMTransforms,
+  type IDMTransformSummary,
+} from './sequencer/transform/idmTransform';
 import type {
+  IDMTransformMutationState,
+  IDMTransformSettings,
   MainWorkspaceMode,
   PatternGeneratorSettings,
   PatternMutationState,
@@ -238,6 +249,13 @@ export function App() {
     createDefaultMutationState(),
   );
   const [generationSummary, setGenerationSummary] = useState<GenerationSummary | null>(null);
+  const [idmSettings, setIDMSettings] = useState<IDMTransformSettings>(() =>
+    createDefaultIDMTransformSettings(),
+  );
+  const [idmMutationState, setIDMMutationState] = useState<IDMTransformMutationState>(() =>
+    createDefaultIDMTransformMutationState(),
+  );
+  const [idmSummary, setIDMSummary] = useState<IDMTransformSummary | null>(null);
   const [patternHistory, setPatternHistory] = useState<PatternHistory>(() =>
     createPatternHistory(initialPatternState()),
   );
@@ -351,8 +369,10 @@ export function App() {
     setPatternMessage(null);
     setGenerationSummary(null);
     setMutationState(createDefaultMutationState(generatorSettings.seed));
+    setIDMSummary(null);
+    setIDMMutationState(createDefaultIDMTransformMutationState(idmSettings.seed));
     setFocusedSequencerCell({ laneId: 'low', stepIndex: 0 });
-  }, [generatorSettings.seed]);
+  }, [generatorSettings.seed, idmSettings.seed]);
 
   const pushPatternEdit = useCallback(
     (
@@ -1247,7 +1267,7 @@ export function App() {
   const updateSelectedPatternEvent = useCallback(
     (
       eventId: string,
-      patch: Partial<Pick<SequencerEvent, 'velocity' | 'pan' | 'pitchSemitones'>>,
+      patch: Partial<Pick<SequencerEvent, 'velocity' | 'pan' | 'pitchSemitones' | 'transform'>>,
     ) => {
       if (editLocked) {
         setPatternMessage(t('sequencer.editLocked'));
@@ -1256,7 +1276,8 @@ export function App() {
       if (
         patch.velocity !== undefined ||
         patch.pan !== undefined ||
-        patch.pitchSemitones !== undefined
+        patch.pitchSemitones !== undefined ||
+        patch.transform !== undefined
       ) {
         const claimed = updateEvent(pattern, eventId, { ...patch, origin: 'manual' });
         if (claimed.changed) pushPatternEdit(claimed.pattern, claimed.selectedEventId);
@@ -1318,8 +1339,10 @@ export function App() {
     const runtime = audioRuntimeStore.get();
     if (!runtime) return;
     setPlayback(playbackEngine.stop());
-    void sequencerEngine.play(pattern, slices).then(setSequencerTransport);
-  }, [pattern, slices]);
+    void sequencerEngine
+      .play({ pattern, slices, seed: generatorSettings.seed })
+      .then(setSequencerTransport);
+  }, [generatorSettings.seed, pattern, slices]);
 
   const pausePattern = useCallback(() => {
     setSequencerTransport(sequencerEngine.pause());
@@ -1370,14 +1393,35 @@ export function App() {
     setMutationState(createDefaultMutationState(normalized.seed));
   }, []);
 
+  const updateIDMSettings = useCallback((settings: IDMTransformSettings) => {
+    const normalized = normalizeIDMTransformSettings(settings);
+    setIDMSettings(normalized);
+    setIDMMutationState(createDefaultIDMTransformMutationState(normalized.seed));
+  }, []);
+
   const applyGenerationResult = useCallback(
     (result: ReturnType<typeof generatePattern>) => {
+      let finalPattern = result.pattern;
+      let selectedEventId = result.selectedEventId;
+      if (idmSettings.applyAfterGeneration && idmSettings.intensity > 0) {
+        const transformed = applyIDMTransform({
+          pattern: finalPattern,
+          selectedEventId,
+          settings: { ...idmSettings, seed: generatorSettings.seed },
+          mutationState: idmMutationState,
+          action: 'apply',
+        });
+        finalPattern = transformed.pattern;
+        selectedEventId = transformed.selectedEventId;
+        setIDMSummary(transformed.summary);
+        setIDMMutationState(transformed.mutationState);
+      }
       setGenerationSummary(result.summary);
       setMutationState(result.mutationState);
-      if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+      if (result.changed) pushPatternEdit(finalPattern, selectedEventId);
       else setPatternMessage(t('generator.noChange'));
     },
-    [pushPatternEdit, t],
+    [generatorSettings.seed, idmMutationState, idmSettings, pushPatternEdit, t],
   );
 
   const generateCurrentPattern = useCallback(() => {
@@ -1514,6 +1558,72 @@ export function App() {
     pushPatternEdit(setAllEventLocks(pattern, false), patternHistory.present.selectedEventId);
   }, [editLocked, pattern, patternHistory.present.selectedEventId, pushPatternEdit]);
 
+  const applyCurrentIDMTransform = useCallback(() => {
+    if (editLocked) return;
+    const result = applyIDMTransform({
+      pattern,
+      selectedEventId: patternHistory.present.selectedEventId,
+      settings: idmSettings,
+      mutationState: idmMutationState,
+      action: 'apply',
+    });
+    setIDMSummary(result.summary);
+    setIDMMutationState(result.mutationState);
+    if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+    else setPatternMessage(t('idm.noChange'));
+  }, [
+    editLocked,
+    idmMutationState,
+    idmSettings,
+    pattern,
+    patternHistory.present.selectedEventId,
+    pushPatternEdit,
+    t,
+  ]);
+
+  const mutateCurrentIDMTransform = useCallback(() => {
+    if (editLocked) return;
+    const result = applyIDMTransform({
+      pattern,
+      selectedEventId: patternHistory.present.selectedEventId,
+      settings: idmSettings,
+      mutationState: idmMutationState,
+      action: 'mutate',
+    });
+    setIDMSummary(result.summary);
+    setIDMMutationState(result.mutationState);
+    if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+    else setPatternMessage(t('idm.noChange'));
+  }, [
+    editLocked,
+    idmMutationState,
+    idmSettings,
+    pattern,
+    patternHistory.present.selectedEventId,
+    pushPatternEdit,
+    t,
+  ]);
+
+  const resetCurrentIDMTransform = useCallback(() => {
+    if (editLocked) return;
+    const result = resetIDMTransforms({
+      pattern,
+      selectedEventId: patternHistory.present.selectedEventId,
+      settings: idmSettings,
+    });
+    setIDMSummary(result.summary);
+    setIDMMutationState(result.mutationState);
+    if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+    else setPatternMessage(t('idm.noChange'));
+  }, [
+    editLocked,
+    idmSettings,
+    pattern,
+    patternHistory.present.selectedEventId,
+    pushPatternEdit,
+    t,
+  ]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (workspaceMode !== 'sequencer' || isTextInputTarget(event.target)) return;
@@ -1534,6 +1644,37 @@ export function App() {
       if (key === 'l') {
         event.preventDefault();
         toggleSelectedEventLock();
+        return;
+      }
+      if (!selectedEvent || editLocked) return;
+      if (key === 'r') {
+        event.preventDefault();
+        const nextTransform = event.shiftKey
+          ? {
+              ...selectedEvent.transform,
+              ratchetCount:
+                selectedEvent.transform.ratchetCount >= 4
+                  ? 1
+                  : selectedEvent.transform.ratchetCount + 1,
+            }
+          : { ...selectedEvent.transform, reverse: !selectedEvent.transform.reverse };
+        const result = updateEvent(pattern, selectedEvent.id, {
+          transform: nextTransform,
+          origin: 'manual',
+        });
+        if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+        return;
+      }
+      if (key === 'p') {
+        event.preventDefault();
+        const current = selectedEvent.transform.probability;
+        const probability =
+          current > 0.99 ? 0.75 : current > 0.74 ? 0.5 : current > 0.49 ? 0.25 : 1;
+        const result = updateEvent(pattern, selectedEvent.id, {
+          transform: { ...selectedEvent.transform, probability },
+          origin: 'manual',
+        });
+        if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
       }
     };
 
@@ -1542,7 +1683,11 @@ export function App() {
   }, [
     generateCurrentPattern,
     mutateCurrentPattern,
+    editLocked,
+    pattern,
+    pushPatternEdit,
     regenerateUnlockedPattern,
+    selectedEvent,
     toggleSelectedEventLock,
     workspaceMode,
   ]);
@@ -1554,6 +1699,17 @@ export function App() {
         return;
       }
       pushPatternEdit(setPatternBpm(pattern, bpm), patternHistory.present.selectedEventId);
+    },
+    [editLocked, pattern, patternHistory.present.selectedEventId, pushPatternEdit, t],
+  );
+
+  const changePatternSwing = useCallback(
+    (swing: number) => {
+      if (editLocked) {
+        setPatternMessage(t('sequencer.editLocked'));
+        return;
+      }
+      pushPatternEdit(setPatternSwing(pattern, swing), patternHistory.present.selectedEventId);
     },
     [editLocked, pattern, patternHistory.present.selectedEventId, pushPatternEdit, t],
   );
@@ -1828,9 +1984,13 @@ export function App() {
                   generatorReady={generatorStatus.ready}
                   generatorReason={generatorStatus.reasonKey}
                   generationSummary={generationSummary}
+                  idmSettings={idmSettings}
+                  idmMutationState={idmMutationState}
+                  idmSummary={idmSummary}
                   onToolChange={setSequencerTool}
                   onBpmChange={changePatternBpm}
                   onBarsChange={changePatternBars}
+                  onSwingChange={changePatternSwing}
                   onLoopChange={setPatternLoop}
                   onPlay={playPattern}
                   onPause={pausePattern}
@@ -1873,6 +2033,10 @@ export function App() {
                   onRandomizeSeed={randomizeSeed}
                   onCopySeed={copySeed}
                   onResetGeneratorSettings={resetGeneratorSettings}
+                  onIDMSettingsChange={updateIDMSettings}
+                  onApplyIDMTransform={applyCurrentIDMTransform}
+                  onMutateIDMTransform={mutateCurrentIDMTransform}
+                  onResetIDMTransform={resetCurrentIDMTransform}
                   onToggleSelectedEventLock={toggleSelectedEventLock}
                   onLockAllEvents={lockAllEvents}
                   onUnlockAllEvents={unlockAllEvents}

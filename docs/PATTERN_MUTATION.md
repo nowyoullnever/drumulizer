@@ -20,4 +20,4 @@ Every changed mutation creates one undoable Pattern edit. No-op mutations, inclu
 
 ## Limits
 
-Mutation does not implement probability playback, microtiming, swing, ratchets, audio resynthesis, or project persistence.
+Pattern mutation may now be combined with IDM Transform mutation. It still does not implement audio resynthesis, project persistence, export, arrangement, or time stretching.

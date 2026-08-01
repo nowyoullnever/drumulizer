@@ -5,6 +5,10 @@ import {
   createDefaultGeneratorSettings,
   createDefaultMutationState,
 } from '../sequencer/generator/generatorTypes';
+import {
+  createDefaultIDMTransformMutationState,
+  createDefaultIDMTransformSettings,
+} from '../sequencer/transform/idmTransform';
 import { createDefaultPattern } from '../sequencer/patternModel';
 import { I18nProvider } from '../i18n/I18nProvider';
 import { localeStorageKey } from '../i18n/localeStorage';
@@ -37,9 +41,13 @@ describe('generator UI', () => {
           generatorReady
           generatorReason={null}
           generationSummary={null}
+          idmSettings={createDefaultIDMTransformSettings()}
+          idmMutationState={createDefaultIDMTransformMutationState()}
+          idmSummary={null}
           onToolChange={vi.fn()}
           onBpmChange={vi.fn()}
           onBarsChange={vi.fn()}
+          onSwingChange={vi.fn()}
           onLoopChange={vi.fn()}
           onPlay={vi.fn()}
           onPause={vi.fn()}
@@ -66,6 +74,10 @@ describe('generator UI', () => {
           onRandomizeSeed={vi.fn()}
           onCopySeed={vi.fn()}
           onResetGeneratorSettings={vi.fn()}
+          onIDMSettingsChange={vi.fn()}
+          onApplyIDMTransform={vi.fn()}
+          onMutateIDMTransform={vi.fn()}
+          onResetIDMTransform={vi.fn()}
           onToggleSelectedEventLock={vi.fn()}
           onLockAllEvents={vi.fn()}
           onUnlockAllEvents={vi.fn()}

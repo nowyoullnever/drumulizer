@@ -9,7 +9,7 @@ Drumulizer uses semantic versioning during staged product development.
 - v0.5.0: Committed slice analysis, role scoring, and Slice Library
 - v0.6.0: Manual sequencer and accurate Web Audio scheduling
 - v0.7.0: Deterministic rule-based Pattern generation, mutation, and robust staged Windows packaging
-- v0.8.0: Granular engine and deeper generative controls
+- v0.8.0: IDM Event transformations and selective Granular playback
 - v0.9.0: Save, export, and release publishing
 - v1.0.0: First stable release
 

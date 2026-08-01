@@ -1,18 +1,24 @@
 import {
   MAX_ACTIVE_SEQUENCER_VOICES,
   SEQUENCER_LOOKAHEAD_MS,
-  SEQUENCER_SCHEDULE_AHEAD_SECONDS,
 } from '../../shared/constants/sequencer';
 import { getAudioContext } from '../audio/importAudio';
 import type { SliceRegion } from '../slice/types';
-import { buildEventAudioPlan } from './eventAudio';
 import {
   beatsFromPosition,
+  dynamicScheduleAheadSeconds,
+  dynamicTransportStartLeadSeconds,
   patternDurationSeconds,
   scheduleWindow,
   stepFromPosition,
 } from './schedulerMath';
-import type { SequencerEvent, SequencerPattern, SequencerTransportState } from './types';
+import { ReverseBufferCache, reverseOffsetForSliceBuffer } from './reverseBufferCache';
+import type {
+  ScheduledSequencerEvent,
+  SequencerEvent,
+  SequencerPattern,
+  SequencerTransportState,
+} from './types';
 
 interface ActiveVoice {
   source: AudioBufferSourceNode;
@@ -32,16 +38,22 @@ export class SequencerEngine {
   private scheduledKeys = new Set<string>();
   private voices = new Set<ActiveVoice>();
   private masterGain = 0.85;
+  private seed = 'drumulizer-080';
+  private sourceId = 'source';
+  private reverseCache = new ReverseBufferCache();
 
   load(buffer: AudioBuffer): SequencerTransportState {
     this.stop();
     this.buffer = buffer;
+    this.sourceId = `source-${buffer.sampleRate}-${buffer.length}-${buffer.numberOfChannels}`;
+    this.reverseCache.clear();
     return this.snapshot();
   }
 
   clear(): SequencerTransportState {
     this.stop();
     this.buffer = null;
+    this.reverseCache.clear();
     return this.snapshot();
   }
 
@@ -49,13 +61,20 @@ export class SequencerEngine {
     this.masterGain = Math.max(0, Math.min(1, Number.isFinite(gain) ? gain : 0.85));
   }
 
-  async play(pattern: SequencerPattern, slices: SliceRegion[]): Promise<SequencerTransportState> {
+  async play(input: {
+    pattern: SequencerPattern;
+    slices: SliceRegion[];
+    seed?: string;
+  }): Promise<SequencerTransportState> {
     if (!this.buffer) return this.snapshot();
     this.context = getAudioContext();
     if (this.context.state === 'suspended') await this.context.resume();
-    this.update(pattern, slices);
+    this.seed = input.seed ?? this.seed;
+    this.update(input.pattern, input.slices);
+    await this.prewarmReverseBuffers(input.pattern, input.slices);
     if (this.status !== 'paused') this.pausedPositionSeconds = 0;
-    this.startContextTime = this.context.currentTime - this.pausedPositionSeconds;
+    const lead = this.status === 'paused' ? 0 : dynamicTransportStartLeadSeconds(input.pattern);
+    this.startContextTime = this.context.currentTime + lead - this.pausedPositionSeconds;
     this.status = 'playing';
     this.scheduledKeys.clear();
     this.tick();
@@ -110,13 +129,24 @@ export class SequencerEngine {
     if (this.context.state === 'suspended') await this.context.resume();
     const slice = input.slices.find((candidate) => candidate.id === input.event.sliceId);
     if (!slice) return;
-    this.scheduleAudio(
-      input.event,
-      input.pattern,
-      slice,
-      this.context.currentTime + 0.01,
-      input.masterGain,
-    );
+    const auditionEvent: SequencerEvent = {
+      ...input.event,
+      transform: { ...input.event.transform, probability: 1 },
+    };
+    await this.prewarmReverseBuffers({ ...input.pattern, events: [auditionEvent] }, input.slices);
+    const result = scheduleWindow({
+      pattern: { ...input.pattern, events: [auditionEvent], loopEnabled: false },
+      slices: input.slices,
+      windowStartSeconds: 0,
+      windowEndSeconds: dynamicScheduleAheadSeconds(input.pattern),
+      transportOriginSeconds: this.context.currentTime + 0.01,
+      scheduledKeys: new Set<string>(),
+      masterGain: input.masterGain,
+      seed: this.seed,
+      maxVoices: MAX_ACTIVE_SEQUENCER_VOICES,
+    });
+    for (const scheduled of result.scheduled)
+      void this.scheduleVoice(scheduled, auditionEvent, slice);
   }
 
   private tick(): void {
@@ -130,46 +160,61 @@ export class SequencerEngine {
     const result = scheduleWindow({
       pattern: this.pattern,
       slices: this.slices,
-      windowStartSeconds: position,
-      windowEndSeconds: position + SEQUENCER_SCHEDULE_AHEAD_SECONDS,
+      windowStartSeconds: Math.max(
+        -dynamicTransportStartLeadSeconds(this.pattern),
+        position - dynamicScheduleAheadSeconds(this.pattern),
+      ),
+      windowEndSeconds: position + dynamicScheduleAheadSeconds(this.pattern),
       transportOriginSeconds: this.startContextTime,
       scheduledKeys: this.scheduledKeys,
       masterGain: this.masterGain,
+      seed: this.seed,
     });
     for (const scheduled of result.scheduled) {
       if (this.voices.size >= MAX_ACTIVE_SEQUENCER_VOICES) break;
       const event = this.pattern.events.find((candidate) => candidate.id === scheduled.eventId);
       const slice = this.slices.find((candidate) => candidate.id === event?.sliceId);
-      if (event && slice)
-        this.scheduleAudio(event, this.pattern, slice, scheduled.audioTimeSeconds, this.masterGain);
+      if (event && slice) void this.scheduleVoice(scheduled, event, slice);
     }
   }
 
-  private scheduleAudio(
+  private async scheduleVoice(
+    scheduled: ScheduledSequencerEvent,
     event: SequencerEvent,
-    pattern: SequencerPattern,
     slice: SliceRegion,
-    audioTimeSeconds: number,
-    masterGain: number,
-  ): void {
+  ): Promise<void> {
     if (!this.context || !this.buffer) return;
-    const plan = buildEventAudioPlan({
-      event,
-      slice,
-      lane: pattern.lanes[event.laneId],
-      masterGain,
-    });
-    if (plan.durationSeconds <= 0) return;
+    if (scheduled.durationSeconds <= 0) return;
+    let sourceBuffer = this.buffer;
+    if (scheduled.reverse) {
+      try {
+        sourceBuffer = await this.reverseCache.getOrCreate({
+          context: this.context,
+          sourceId: this.sourceId,
+          source: this.buffer,
+          slice,
+        });
+      } catch {
+        return;
+      }
+    }
+    const offsetSeconds = scheduled.reverse
+      ? reverseOffsetForSliceBuffer({
+          slice,
+          sourceOffsetSeconds: scheduled.offsetSeconds,
+          durationSeconds: scheduled.durationSeconds,
+        })
+      : scheduled.offsetSeconds;
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     const panner =
       typeof this.context.createStereoPanner === 'function'
         ? this.context.createStereoPanner()
         : null;
-    source.buffer = this.buffer;
-    source.playbackRate.value = plan.playbackRate;
+    source.buffer = sourceBuffer;
+    source.playbackRate.value = scheduled.playbackRate;
     if (panner) {
-      panner.pan.value = plan.pan;
+      panner.pan.value = scheduled.pan;
       source.connect(gain);
       gain.connect(panner);
       panner.connect(this.context.destination);
@@ -177,14 +222,15 @@ export class SequencerEngine {
       source.connect(gain);
       gain.connect(this.context.destination);
     }
-    const fade = plan.fadeSeconds;
-    const start = Math.max(this.context.currentTime, audioTimeSeconds);
-    const stop = start + plan.durationSeconds;
+    const fade = scheduled.fadeSeconds;
+    const start = Math.max(this.context.currentTime, scheduled.audioTimeSeconds);
+    const stop = start + scheduled.durationSeconds;
     const fadeOutStart = Math.max(start + fade, stop - fade);
     gain.gain.cancelScheduledValues(start);
     gain.gain.setValueAtTime(0, start);
-    gain.gain.linearRampToValueAtTime(plan.outputGain, start + fade);
-    gain.gain.setValueAtTime(plan.outputGain, fadeOutStart);
+    const outputGain = scheduled.eventGain * scheduled.laneGain * this.masterGain;
+    gain.gain.linearRampToValueAtTime(outputGain, start + fade);
+    gain.gain.setValueAtTime(outputGain, fadeOutStart);
     gain.gain.linearRampToValueAtTime(0, stop);
     const voice: ActiveVoice = { source, gain, panner };
     source.onended = (): void => {
@@ -193,9 +239,31 @@ export class SequencerEngine {
       panner?.disconnect();
       this.voices.delete(voice);
     };
-    source.start(start, plan.offsetSeconds, plan.sourceDurationSeconds);
+    source.start(start, offsetSeconds, scheduled.sourceDurationSeconds);
     source.stop(stop);
     this.voices.add(voice);
+  }
+
+  private async prewarmReverseBuffers(
+    pattern: SequencerPattern,
+    slices: SliceRegion[],
+  ): Promise<void> {
+    if (!this.context || !this.buffer) return;
+    const slicesById = new Map(slices.map((slice) => [slice.id, slice]));
+    const reverseEvents = pattern.events.filter((event) => event.transform.reverse);
+    await Promise.allSettled(
+      reverseEvents.map((event) => {
+        const slice = slicesById.get(event.sliceId);
+        return slice
+          ? this.reverseCache.getOrCreate({
+              context: this.context as AudioContext,
+              sourceId: this.sourceId,
+              source: this.buffer as AudioBuffer,
+              slice,
+            })
+          : Promise.resolve(this.buffer as AudioBuffer);
+      }),
+    );
   }
 
   private positionSeconds(): number {

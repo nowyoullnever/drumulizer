@@ -10,6 +10,10 @@ Slice analysis is deterministic local DSP. It does not call network APIs, fetch 
 
 Pattern generation and mutation are deterministic local rule logic. They do not call network APIs, fetch remote models, use AI services, perform cloud inference, inspect online examples, or send Seed, slice metadata, filenames, audio, Events, or analysis data outside the renderer.
 
+## v0.8.0
+
+IDM Transform, Probability, Reverse preparation, and Granular planning are local deterministic renderer logic. They do not use network APIs, remote models, telemetry, online examples, or cloud processing.
+
 ## Production
 
 Production blocks outgoing HTTP and HTTPS requests from the Electron session. The app does not use remote APIs, cloud AI, machine learning services, telemetry, analytics, crash-reporting services, CDNs, online font loading, remote images, remote stylesheets, automatic updates, remote configuration, feature flags, online authentication, or remote license checks. There is no remote URL import field, browser component, network client, or remote media loader.

@@ -1,6 +1,6 @@
 # Pattern Generator
 
-Drumulizer v0.7.0 adds a deterministic local rule-based Pattern Generator. It is not AI, not machine learning, and does not use network services. The generator produces ordinary Sequencer Events that play through the existing Web Audio scheduler.
+Drumulizer v0.7.0 added a deterministic local rule-based Pattern Generator. v0.8.0 can automatically decorate generated Events with deterministic IDM transforms when Apply After Generation is enabled. It is not AI, not machine learning, and does not use network services.
 
 ## Prerequisites
 
@@ -25,4 +25,4 @@ Events carry `manual`, `generated`, or `mutated` origin plus a lock flag. Manual
 
 ## Limits
 
-v0.7.0 does not implement probability playback, Swing, microtiming, ratchets, granular synthesis, project persistence, export, BPM detection, or beat tracking.
+v0.8.0 implements Event Probability, Swing, Microtiming, Ratchet, Reverse, and selective Event-based Granular Burst playback. It still does not implement project persistence, export, BPM detection, beat tracking, continuous granular synthesis, or master effects.

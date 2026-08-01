@@ -4,11 +4,14 @@ import {
   clearLane,
   clearPattern,
   createDefaultPattern,
+  DEFAULT_EVENT_TRANSFORM,
+  normalizeEventTransform,
   paintEvent,
   reconcilePatternSlices,
   setLaneState,
   setPatternBars,
   setPatternBpm,
+  setPatternSwing,
   updateEvent,
 } from '../sequencer/patternModel';
 import type { SliceRegion } from '../slice/types';
@@ -81,5 +84,43 @@ describe('sequencer pattern model', () => {
     });
     expect(pattern.bpm).toBe(240);
     expect(pattern.lanes.high).toMatchObject({ muted: true, soloed: true, gainDb: 6 });
+  });
+
+  it('normalizes legacy and non-finite transformation state safely', () => {
+    const pattern = paintEvent({
+      pattern: createDefaultPattern(),
+      laneId: 'low',
+      stepIndex: 0,
+      sliceId: 'a',
+    }).pattern;
+    expect(pattern.events[0].transform).toEqual(DEFAULT_EVENT_TRANSFORM);
+
+    const normalized = normalizeEventTransform({
+      probability: Number.NaN,
+      timingOffsetSteps: -99,
+      ratchetCount: 99,
+      ratchetDecay: 99,
+      reverse: true,
+      playbackMode: 'granular',
+      grainSizeMs: 999,
+      grainCount: 99,
+      grainPosition: 99,
+      grainSpray: 99,
+      grainPitchJitterSemitones: 99,
+    });
+    expect(normalized).toMatchObject({
+      probability: 1,
+      timingOffsetSteps: -0.45,
+      ratchetCount: 4,
+      ratchetDecay: 1,
+      reverse: true,
+      playbackMode: 'granular',
+      grainSizeMs: 120,
+      grainCount: 8,
+      grainPosition: 1,
+      grainSpray: 1,
+      grainPitchJitterSemitones: 12,
+    });
+    expect(setPatternSwing(createDefaultPattern(), 999).swing).toBe(100);
   });
 });
