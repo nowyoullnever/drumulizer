@@ -1,6 +1,6 @@
 {
   "name": "drumulizer",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Offline sample-based IDM drum-loop generator foundation.",
   "author": "nowyoullnever",
   "license": "UNLICENSED",
@@ -21,6 +21,8 @@
     "test:sequencer": "vitest run sequencerScheduler sequencerPattern sequencerUi",
     "test:generator": "vitest run generator prng grammar mutation generatorEvaluation generatorUi",
     "test:idm": "vitest run probability timing ratchet reverse granular idmTransform transformEvaluation",
+    "test:project": "vitest run projectSchema portableProject projectState",
+    "test:export": "vitest run wavEncoder offlineRender sliceExport exportEvaluation",
     "verify:onset": "npm run typecheck && npm run test:onset",
     "build": "npm run typecheck && electron-vite build",
     "dist:win": "npm run build && node scripts/package-windows.mjs",

@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.9.0] - 2026-08-01
+
+### Added
+
+- Versioned linked project files with exact source fingerprinting.
+- Single-file portable projects with embedded original audio.
+- Missing-source relinking with SHA-256 verification.
+- Transactional project loading and unsaved-change protection.
+- Deterministic offline Pattern rendering.
+- Seamless one-cycle Loop WAV rendering.
+- Multi-loop Performance WAV rendering.
+- Stereo master mix and LOW/MID/HIGH/TEXTURE stem export.
+- Selected and included Slice WAV export.
+- 16-bit and 24-bit PCM WAV encoding.
+- Shared peak normalization and clipping diagnostics.
+- Korean and English project and export interfaces.
+
+### Changed
+
+- Audio imports now use a trusted Main-process source registry.
+- Pattern playback planning is shared by real-time and offline rendering.
+- Window closing now protects unsaved project changes.
+
 ## [0.8.0] - 2026-08-01
 
 ### Added

@@ -25,4 +25,4 @@ Events carry `manual`, `generated`, or `mutated` origin plus a lock flag. Manual
 
 ## Limits
 
-v0.8.0 implements Event Probability, Swing, Microtiming, Ratchet, Reverse, and selective Event-based Granular Burst playback. It still does not implement project persistence, export, BPM detection, beat tracking, continuous granular synthesis, or master effects.
+v0.8.0 implements Event Probability, Swing, Microtiming, Ratchet, Reverse, and selective Event-based Granular Burst playback. v0.9.0 persists Generator and IDM settings in projects and uses the same Seed values for deterministic offline render decisions. It still does not implement BPM detection, beat tracking, continuous granular synthesis, or master effects.

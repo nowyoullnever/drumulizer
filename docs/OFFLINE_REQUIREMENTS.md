@@ -43,3 +43,7 @@ Audio tools must stay available, private, deterministic, and usable when disconn
 - Confirm fonts, CSS, images, and scripts load locally.
 - Confirm no telemetry or updater package is present.
 - Confirm the primary UI has no URL import affordance, offline/network mode control, or remote media loader.
+
+## v0.9.0 Project and Export Boundary
+
+Project persistence, portable projects, source relinking, offline rendering, and WAV export remain fully local. Renderer code does not receive unrestricted filesystem APIs; Main owns native dialogs, source registry, SHA-256 hashing, project writes, and export writes.

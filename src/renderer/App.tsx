@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { APP_VERSION } from '../shared/version';
-import type { AppStatus, DrumulizerAppInfo, LocalAudioFileResult } from '../shared/types/app';
+import type {
+  AppStatus,
+  DrumulizerAppInfo,
+  LocalAudioFileResult,
+  ProjectSessionInfo,
+} from '../shared/types/app';
 import { audioRuntimeStore } from './audio/runtimeStore';
 import { AudioImportError, decodeImportedAudio } from './audio/importAudio';
 import { PlaybackEngine } from './audio/playbackEngine';
@@ -88,6 +93,13 @@ import type {
   WaveformPeaks,
 } from './audio/types';
 import { clamp } from './audio/time';
+import {
+  createProjectSnapshot,
+  isSerializableCreativeProjectState,
+  stableProjectString,
+  type SerializableCreativeProjectState,
+} from './project/projectState';
+import { exportPatternWavs, exportSliceWav, type ExportOutputMode } from './export/offlineRender';
 import { AppStatusModule } from './components/AppStatusModule';
 import { AnalysisPanel } from './components/AnalysisPanel';
 import { ErrorBanner } from './components/ErrorBanner';
@@ -158,14 +170,20 @@ const initialPatternState = () => ({
 
 const initialSequencerTransport = (): SequencerTransportState => sequencerEngine.snapshot();
 
-const makeDroppedAudioResult = async (file: File): Promise<LocalAudioFileResult> => ({
-  canceled: false,
-  fileName: file.name,
-  extension: file.name.split('.').pop()?.toLowerCase() === 'mp3' ? 'mp3' : 'wav',
-  mimeType: file.type,
-  fileSizeBytes: file.size,
-  bytes: await file.arrayBuffer(),
-});
+const makeDroppedAudioResult = async (file: File): Promise<LocalAudioFileResult> => {
+  const bytes = await file.arrayBuffer();
+  if (window.drumulizer) {
+    return window.drumulizer.registerAudioBytes({ fileName: file.name, bytes });
+  }
+  return {
+    canceled: false,
+    fileName: file.name,
+    extension: file.name.split('.').pop()?.toLowerCase() === 'mp3' ? 'mp3' : 'wav',
+    mimeType: file.type,
+    fileSizeBytes: file.size,
+    bytes,
+  };
+};
 
 const selectFileInRendererPreview = (): Promise<LocalAudioFileResult> =>
   new Promise((resolve) => {
@@ -204,6 +222,17 @@ export function App() {
   const [status, setStatus] = useState<AppStatus>('ready');
   const [importState, setImportState] = useState<AudioImportState>({ status: 'empty' });
   const [metadata, setMetadata] = useState<AudioSourceMetadata | null>(null);
+  const [sourceToken, setSourceToken] = useState<string | null>(null);
+  const [sourceKind, setSourceKind] = useState<LocalAudioFileResult['sourceKind']>(undefined);
+  const [projectSession, setProjectSession] = useState<ProjectSessionInfo | null>(null);
+  const [projectBaseline, setProjectBaseline] = useState('');
+  const [projectMessage, setProjectMessage] = useState<string | null>(null);
+  const [exportOutputMode, setExportOutputMode] = useState<ExportOutputMode>('mix');
+  const [exportRenderMode, setExportRenderMode] = useState<'seamless-loop' | 'performance'>(
+    'seamless-loop',
+  );
+  const [exportLoops, setExportLoops] = useState(4);
+  const [exportBitDepth, setExportBitDepth] = useState<16 | 24>(16);
   const [peaks, setPeaks] = useState<WaveformPeaks | null>(null);
   const [playback, setPlayback] = useState<PlaybackSnapshot>(initialPlayback);
   const [dragActive, setDragActive] = useState(false);
@@ -319,11 +348,71 @@ export function App() {
   const pattern = patternHistory.present.pattern;
   const selectedEvent =
     pattern.events.find((event) => event.id === patternHistory.present.selectedEventId) ?? null;
+  const validSliceAnalysis =
+    sliceAnalysisResult &&
+    sliceAnalysisResult.sourceId === metadata?.id &&
+    sliceAnalysisResult.sliceSetSignature === currentSliceSignature
+      ? sliceAnalysisResult
+      : null;
+  const projectSnapshot = useMemo(
+    () =>
+      createProjectSnapshot({
+        sourceToken,
+        metadata,
+        sourceLengthSamples,
+        sliceHistory: sliceHistory.present,
+        zeroCrossingEnabled,
+        customDivision,
+        onsetSettings,
+        onsetApplyMode,
+        validSliceAnalysis,
+        sliceAnnotations,
+        pattern,
+        generatorSettings,
+        mutationState,
+        idmSettings,
+        idmMutationState,
+        masterGain: playback.masterGain,
+      }),
+    [
+      customDivision,
+      generatorSettings,
+      idmMutationState,
+      idmSettings,
+      metadata,
+      mutationState,
+      onsetApplyMode,
+      onsetSettings,
+      pattern,
+      playback.masterGain,
+      sliceAnnotations,
+      sliceHistory.present,
+      sourceLengthSamples,
+      sourceToken,
+      validSliceAnalysis,
+      zeroCrossingEnabled,
+    ],
+  );
+  const projectSnapshotString = useMemo(
+    () => stableProjectString(projectSnapshot),
+    [projectSnapshot],
+  );
+  const projectDirty = Boolean(projectSnapshotString && projectSnapshotString !== projectBaseline);
 
   const errorMessageForCode = useCallback(
     (code: UserFacingErrorCode) => t(errorKeyForCode(code)),
     [t],
   );
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+      if (!projectDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [projectDirty]);
 
   const applyImportError = useCallback(
     (code: UserFacingErrorCode) => {
@@ -441,7 +530,14 @@ export function App() {
   );
 
   const importAudio = useCallback(
-    async (resultPromise: Promise<LocalAudioFileResult>, label = t('source.open')) => {
+    async (
+      resultPromise: Promise<LocalAudioFileResult>,
+      label = t('source.open'),
+      restoredProject?: {
+        state: SerializableCreativeProjectState;
+        session: ProjectSessionInfo;
+      },
+    ) => {
       const generation = importGeneration.current + 1;
       importGeneration.current = generation;
       setErrorMessage(null);
@@ -475,14 +571,59 @@ export function App() {
         if (generation !== importGeneration.current) return;
 
         playbackEngine.clear();
-        resetPattern();
         audioRuntimeStore.set(decoded);
         discardOnsetPreview();
         setMetadata(decoded.metadata);
+        setSourceToken(result.sourceToken ?? null);
+        setSourceKind(result.sourceKind);
         setPeaks(builtPeaks);
         setPlayback(playbackEngine.load(decoded.originalBuffer));
         setSequencerTransport(sequencerEngine.load(decoded.originalBuffer));
-        initializeSlicesForSource(decoded.originalBuffer.length, decoded.metadata.sampleRate);
+        if (restoredProject) {
+          const restored: SerializableCreativeProjectState = {
+            ...restoredProject.state,
+            source: {
+              ...restoredProject.state.source,
+              token: result.sourceToken ?? restoredProject.state.source.token,
+            },
+          };
+          const selectedSliceId = restored.editor.markers[0]?.id ?? '';
+          setSliceHistory(
+            createSliceHistory({
+              markers: restored.editor.markers,
+              selectedMarkerId: null,
+              selectedSliceId,
+            }),
+          );
+          setZeroCrossingEnabled(restored.editor.zeroCrossingEnabled);
+          setCustomDivision(restored.editor.customDivision);
+          setOnsetSettings(clampOnsetSettings(restored.editor.onsetSettings));
+          setOnsetApplyMode(restored.editor.onsetApplyMode);
+          setSliceAnalysisResult(restored.sliceAnalysis?.result ?? null);
+          setSliceAnnotations(
+            restored.sliceAnalysis?.annotations ?? { overrides: {}, excluded: {} },
+          );
+          setPatternHistory(
+            createPatternHistory({
+              pattern: restored.sequencer.pattern,
+              selectedEventId: null,
+            }),
+          );
+          setGeneratorSettings(normalizeGeneratorSettings(restored.sequencer.generatorSettings));
+          setMutationState(restored.sequencer.mutationState);
+          setIDMSettings(normalizeIDMTransformSettings(restored.sequencer.idmSettings));
+          setIDMMutationState(restored.sequencer.idmMutationState);
+          setPlayback((current) => ({ ...current, masterGain: restored.sequencer.masterGain }));
+          setProjectSession(restoredProject.session);
+          setProjectBaseline(stableProjectString(restored));
+          setProjectMessage(`Project opened: ${restoredProject.session.projectName}`);
+        } else {
+          resetPattern();
+          initializeSlicesForSource(decoded.originalBuffer.length, decoded.metadata.sampleRate);
+          setProjectSession(null);
+          setProjectBaseline('');
+          setProjectMessage(null);
+        }
         resetViewport(decoded.metadata.durationSeconds);
         setImportState({ status: 'ready', sourceId: decoded.metadata.id });
         setStatus('ready');
@@ -523,6 +664,11 @@ export function App() {
     sequencerEngine.clear();
     audioRuntimeStore.clear();
     setMetadata(null);
+    setSourceToken(null);
+    setSourceKind(undefined);
+    setProjectSession(null);
+    setProjectBaseline('');
+    setProjectMessage(null);
     setPeaks(null);
     setPlayback(playbackEngine.snapshot());
     setImportState({ status: 'empty' });
@@ -544,6 +690,158 @@ export function App() {
     resetPattern,
     resetViewport,
   ]);
+
+  const confirmUnsaved = useCallback((): boolean => {
+    if (!projectDirty) return true;
+    return window.confirm('Unsaved project changes will be discarded. Continue?');
+  }, [projectDirty]);
+
+  const saveProjectPayload = useCallback(() => {
+    if (!sourceToken || !projectSnapshot) return null;
+    return {
+      sourceToken,
+      projectState: projectSnapshot,
+      existingProjectSessionId: projectSession?.sessionId ?? null,
+    };
+  }, [projectSession?.sessionId, projectSnapshot, sourceToken]);
+
+  const applySavedSession = useCallback(
+    (session: ProjectSessionInfo) => {
+      setProjectSession(session);
+      setProjectBaseline(projectSnapshotString);
+      setProjectMessage(`Project saved: ${session.projectName}`);
+    },
+    [projectSnapshotString],
+  );
+
+  const saveProject = useCallback(async () => {
+    if (!window.drumulizer) return;
+    const payload = saveProjectPayload();
+    if (!payload) return;
+    try {
+      const result = projectSession
+        ? await window.drumulizer.saveProject(payload)
+        : sourceKind === 'linked'
+          ? await window.drumulizer.saveLinkedProjectAs(payload)
+          : await window.drumulizer.savePortableProjectAs(payload);
+      if (!result.canceled) applySavedSession(result.session);
+    } catch (error) {
+      setProjectMessage(error instanceof Error ? error.message : 'Project save failed');
+    }
+  }, [applySavedSession, projectSession, saveProjectPayload, sourceKind]);
+
+  const saveLinkedProjectAs = useCallback(async () => {
+    if (!window.drumulizer) return;
+    const payload = saveProjectPayload();
+    if (!payload) return;
+    try {
+      const result = await window.drumulizer.saveLinkedProjectAs(payload);
+      if (!result.canceled) applySavedSession(result.session);
+    } catch (error) {
+      setProjectMessage(error instanceof Error ? error.message : 'Linked project save failed');
+    }
+  }, [applySavedSession, saveProjectPayload]);
+
+  const savePortableProjectAs = useCallback(async () => {
+    if (!window.drumulizer) return;
+    const payload = saveProjectPayload();
+    if (!payload) return;
+    try {
+      const result = await window.drumulizer.savePortableProjectAs(payload);
+      if (!result.canceled) applySavedSession(result.session);
+    } catch (error) {
+      setProjectMessage(error instanceof Error ? error.message : 'Portable project save failed');
+    }
+  }, [applySavedSession, saveProjectPayload]);
+
+  const openProject = useCallback(async () => {
+    if (!window.drumulizer || !confirmUnsaved()) return;
+    try {
+      const result = await window.drumulizer.openProject();
+      if (result.canceled) return;
+      if (!isSerializableCreativeProjectState(result.projectState)) {
+        throw new Error('Project state validation failed');
+      }
+      await importAudio(Promise.resolve(result.source), result.session.projectName, {
+        state: result.projectState,
+        session: result.session,
+      });
+    } catch (error) {
+      setProjectMessage(error instanceof Error ? error.message : 'Project open failed');
+    }
+  }, [confirmUnsaved, importAudio]);
+
+  const newProject = useCallback(() => {
+    if (!confirmUnsaved()) return;
+    clearSource();
+  }, [clearSource, confirmUnsaved]);
+
+  const exportCurrentPattern = useCallback(async () => {
+    if (!window.drumulizer) return;
+    const runtime = audioRuntimeStore.get();
+    if (!runtime || !metadata) return;
+    try {
+      setStatus('processing');
+      const files = exportPatternWavs({
+        baseName: projectSession?.projectName ?? metadata.fileName.replace(/\.[^.]+$/, ''),
+        pattern,
+        slices,
+        sourceBuffer: runtime.originalBuffer,
+        outputMode: exportOutputMode,
+        options: {
+          mode: exportRenderMode,
+          loops: exportRenderMode === 'performance' ? exportLoops : 1,
+          sampleRate: metadata.sampleRate,
+          bitDepth: exportBitDepth,
+          normalize: true,
+          includeTail: exportRenderMode === 'performance',
+          seed: generatorSettings.seed,
+          masterGain: playback.masterGain,
+        },
+      });
+      const result = await window.drumulizer.chooseExportDirectoryAndWrite({
+        files: files.map((file) => ({ fileName: file.fileName, bytes: file.bytes })),
+      });
+      if (!result.canceled) {
+        const clipped = files.reduce((total, file) => total + file.diagnostics.clippedSamples, 0);
+        setProjectMessage(
+          `Exported ${result.writtenCount} WAV file(s). Clipped samples: ${clipped}`,
+        );
+      }
+      setStatus('ready');
+    } catch (error) {
+      setStatus('error');
+      setProjectMessage(error instanceof Error ? error.message : 'Export failed');
+    }
+  }, [
+    exportBitDepth,
+    exportLoops,
+    exportOutputMode,
+    exportRenderMode,
+    generatorSettings.seed,
+    metadata,
+    pattern,
+    playback.masterGain,
+    projectSession?.projectName,
+    slices,
+  ]);
+
+  const exportSelectedSlice = useCallback(async () => {
+    if (!window.drumulizer) return;
+    const runtime = audioRuntimeStore.get();
+    if (!runtime || !selectedSlice) return;
+    const file = exportSliceWav({
+      fileName: `slice-${selectedSlice.index + 1}.wav`,
+      sourceBuffer: runtime.originalBuffer,
+      slice: selectedSlice,
+      bitDepth: exportBitDepth,
+      sampleRate: metadata?.sampleRate ?? runtime.originalBuffer.sampleRate,
+    });
+    const result = await window.drumulizer.chooseExportDirectoryAndWrite({
+      files: [{ fileName: file.fileName, bytes: file.bytes }],
+    });
+    if (!result.canceled) setProjectMessage(`Exported Slice WAV: ${file.fileName}`);
+  }, [exportBitDepth, metadata?.sampleRate, selectedSlice]);
 
   const updateOnsetSettings = useCallback(
     (settings: OnsetDetectionSettings) => {
@@ -1783,10 +2081,80 @@ export function App() {
 
       <section className="project-status">
         <strong>{t('app.workspace')}</strong>
-        <span>{metadata ? metadata.fileName : t('app.noSample')}</span>
+        <span>
+          {projectSession?.projectName ?? (metadata ? metadata.fileName : t('app.noSample'))}
+        </span>
+        <span>{projectDirty ? t('project.dirty') : t('project.clean')}</span>
+        <span>{projectSession ? projectSession.kind : (sourceKind ?? 'unsaved')}</span>
         <span>{t('app.analysisPending')}</span>
         <span>{t(`sliceAnalysis.status.${sliceAnalysisLifecycle}`)}</span>
       </section>
+
+      <section className="project-toolbar" aria-label="Project and export controls">
+        <PixelButton onClick={newProject}>{t('project.new')}</PixelButton>
+        <PixelButton onClick={openProject}>{t('project.open')}</PixelButton>
+        <PixelButton onClick={saveProject} disabled={!projectSnapshot}>
+          {t('project.save')}
+        </PixelButton>
+        <PixelButton
+          onClick={saveLinkedProjectAs}
+          disabled={!projectSnapshot || sourceKind !== 'linked'}
+        >
+          {t('project.saveLinked')}
+        </PixelButton>
+        <PixelButton onClick={savePortableProjectAs} disabled={!projectSnapshot}>
+          {t('project.savePortable')}
+        </PixelButton>
+        <select
+          value={exportRenderMode}
+          onChange={(event) =>
+            setExportRenderMode(event.currentTarget.value as 'seamless-loop' | 'performance')
+          }
+        >
+          <option value="seamless-loop">Seamless Loop</option>
+          <option value="performance">Performance</option>
+        </select>
+        <select
+          value={exportOutputMode}
+          onChange={(event) => setExportOutputMode(event.currentTarget.value as ExportOutputMode)}
+        >
+          <option value="mix">Mix</option>
+          <option value="stems">Stems</option>
+          <option value="mix-and-stems">Mix + Stems</option>
+        </select>
+        <select
+          value={exportBitDepth}
+          onChange={(event) => setExportBitDepth(Number(event.currentTarget.value) as 16 | 24)}
+        >
+          <option value={16}>16-bit</option>
+          <option value={24}>24-bit</option>
+        </select>
+        <input
+          type="number"
+          min={1}
+          max={16}
+          value={exportLoops}
+          onChange={(event) =>
+            setExportLoops(Math.max(1, Math.min(16, Number(event.currentTarget.value))))
+          }
+          aria-label="Performance loops"
+        />
+        <PixelButton
+          onClick={exportCurrentPattern}
+          disabled={!metadata || pattern.events.length === 0}
+        >
+          {t('export.pattern')}
+        </PixelButton>
+        <PixelButton onClick={exportSelectedSlice} disabled={!selectedSlice}>
+          {t('export.slice')}
+        </PixelButton>
+      </section>
+
+      {projectMessage ? (
+        <section className="project-export-summary" role="status">
+          {projectMessage}
+        </section>
+      ) : null}
 
       {errorMessage ? <ErrorBanner title={t('app.errorTitle')} message={errorMessage} /> : null}
 

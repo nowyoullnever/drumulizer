@@ -74,3 +74,7 @@ The language switch is a compact radio group. It should preserve the current wor
 ## Forbidden Styles
 
 Avoid generic SaaS cards, glassmorphism, glossy knobs, black-and-neon DAW styling, pastel productivity styling, large rounded controls, externally hosted assets, and decorative animation that harms usability.
+
+## v0.9.0 Project and Export Controls
+
+Project and export controls are compact toolbar controls using existing pixel buttons, native selects, and short status labels. They avoid landing-page treatment and keep repeated save/export workflows dense and scannable.

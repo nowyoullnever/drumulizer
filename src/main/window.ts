@@ -2,9 +2,14 @@ import { BrowserWindow } from 'electron';
 import { join } from 'node:path';
 import { WINDOW_TITLE } from '../shared/version';
 import { registerAudioFileHandlers } from './audioFile';
+import { registerProjectHandlers } from './projectHandlers';
 import { configureWindowSecurity } from './security';
+import type { SourceRegistry } from './sourceRegistry';
 
-export const createMainWindow = async (isDevelopment: boolean): Promise<BrowserWindow> => {
+export const createMainWindow = async (
+  isDevelopment: boolean,
+  sourceRegistry: SourceRegistry,
+): Promise<BrowserWindow> => {
   const window = new BrowserWindow({
     width: 1280,
     height: 780,
@@ -24,7 +29,8 @@ export const createMainWindow = async (isDevelopment: boolean): Promise<BrowserW
   });
 
   configureWindowSecurity(window);
-  registerAudioFileHandlers(window);
+  registerAudioFileHandlers(window, sourceRegistry);
+  registerProjectHandlers(window, sourceRegistry);
 
   window.once('ready-to-show', () => {
     window.show();

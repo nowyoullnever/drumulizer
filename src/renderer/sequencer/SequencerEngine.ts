@@ -38,7 +38,7 @@ export class SequencerEngine {
   private scheduledKeys = new Set<string>();
   private voices = new Set<ActiveVoice>();
   private masterGain = 0.85;
-  private seed = 'drumulizer-080';
+  private seed = 'drumulizer-090';
   private sourceId = 'source';
   private reverseCache = new ReverseBufferCache();
 

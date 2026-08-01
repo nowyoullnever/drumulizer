@@ -37,3 +37,5 @@ Events keep stable slice ids. When a source is replaced, cleared, or slice bound
 `SequencerEngine` uses a Web Audio look-ahead scheduler. Timer ticks prepare events in a short future window, but event starts are scheduled with `AudioContext` time. Scheduled keys combine loop index and event id so loop boundaries do not duplicate events. Event gain is derived from velocity, lane gain, and master gain; pan and pitch are applied at event scheduling time.
 
 The scheduler deliberately excludes BPM detection, humanize, MIDI, save/load, export, time stretching, and master effects in v0.8.0. Generated and transformed Events are scheduled through the same Web Audio path as manual Events.
+
+v0.9.0 shares the Sequencer planning model with offline export. Saved Patterns include Swing, all Event transforms, Lane state, Generator settings, IDM settings, mutation state, locks, loop state, and master gain. Loaded projects start stopped at Step 1.
