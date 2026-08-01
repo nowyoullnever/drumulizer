@@ -37,7 +37,7 @@ input {
 .app {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
+  grid-template-rows: auto auto auto auto auto 1fr;
   gap: var(--space-3);
   padding: var(--space-4);
 }
@@ -141,6 +141,35 @@ input {
   min-height: 44px;
   background: var(--color-cobalt);
   color: var(--color-paper-light);
+}
+
+.project-toolbar,
+.project-export-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2);
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--surface-primary);
+}
+
+.project-toolbar select,
+.project-toolbar input {
+  min-height: 36px;
+  border: var(--border-standard) solid var(--border-primary);
+  background: var(--color-paper-light);
+  color: var(--text-primary);
+  font: inherit;
+  padding: var(--space-1);
+}
+
+.project-toolbar input {
+  width: 72px;
+}
+
+.project-export-summary {
+  background: var(--color-paper-light);
 }
 
 .workspace-grid {

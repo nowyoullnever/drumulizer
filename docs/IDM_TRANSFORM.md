@@ -2,6 +2,8 @@
 
 v0.8.0 adds deterministic IDM Transform actions that decorate existing Sequencer Events. The transform engine changes Event playback parameters only; it does not change Lane, Step, Slice assignment, Pattern length, BPM, or slice boundaries.
 
+v0.9.0 persists IDM settings, IDM mutation state, and per-Event transforms in project files. Offline export uses the saved transform data and Seed values to reproduce Probability and Granular decisions.
+
 ## Settings
 
 - Seed: normalized deterministic string.

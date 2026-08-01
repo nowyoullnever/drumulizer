@@ -4,7 +4,7 @@ import { createPrng, normalizeSeed } from '../sequencer/generator/prng';
 describe('generator PRNG', () => {
   it('normalizes seeds and reproduces finite values', () => {
     expect(normalizeSeed('  beat_01!!  ')).toBe('beat_01');
-    expect(normalizeSeed('')).toBe('drumulizer-080');
+    expect(normalizeSeed('')).toBe('drumulizer-090');
     const first = createPrng('same-seed');
     const second = createPrng('same-seed');
     const values = Array.from({ length: 12 }, () => first.next());

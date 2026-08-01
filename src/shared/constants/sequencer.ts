@@ -28,7 +28,7 @@ export const DEFAULT_EVENT_VELOCITY = 1;
 export const DEFAULT_EVENT_PAN = 0;
 export const DEFAULT_EVENT_PITCH_SEMITONES = 0;
 
-export const DEFAULT_GENERATOR_SEED = 'drumulizer-080';
+export const DEFAULT_GENERATOR_SEED = 'drumulizer-090';
 export const MAX_GENERATOR_SEED_LENGTH = 32;
 export const DEFAULT_GENERATOR_DENSITY = 50;
 export const DEFAULT_GENERATOR_VARIATION = 40;

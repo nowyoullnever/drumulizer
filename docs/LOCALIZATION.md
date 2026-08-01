@@ -37,3 +37,7 @@ The test suite checks dictionary key parity, locale detection and persistence, k
 ## v0.4.0 Copy Areas
 
 The onset-analysis interface owns localized strings for transient analysis title, sensitivity, minimum gap, progress, candidate count, candidate density, strongest band, candidate details, confidence, dominant band, support count, Previous/Next Candidate, Candidate Audition, Replace/Merge modes, Apply/Discard Preview, silent source, no candidates found, candidate cap, applied/skipped counts, analysis status, and worker failure surfaces.
+
+## v0.9.0 Copy Areas
+
+Project controls, dirty-state labels, project save/open feedback, and export commands have Korean and English dictionary entries. Language remains an app preference and is not serialized into project files.

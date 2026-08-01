@@ -1,8 +1,8 @@
 # Drumulizer
 
-Drumulizer is a Windows desktop application for building a fully local, sample-based IDM drum-loop workflow. Version `0.8.0` adds deterministic Event transformations: Probability, Swing, tempo-relative Microtiming, Ratchet, Reverse, selective Granular Event playback, and an IDM Transform engine.
+Drumulizer is a Windows desktop application for building a fully local, sample-based IDM drum-loop workflow. Version `0.9.0` adds linked and portable project saving, exact source relinking, deterministic offline WAV rendering, master mix export, LOW/MID/HIGH/TEXTURE stem export, and Slice WAV export.
 
-Current status: local audio slice workspace with manual editing, offline onset assistance, slice analysis, Slice Library curation, manual pattern playback, Seed-reproducible Pattern generation, Density/Variation/Breakage controls, Event locks, Lane generation locks, Event Probability, Pattern Swing, Microtiming, Ratchet, Reverse, Granular Burst, and deterministic IDM Transform. It does not use AI, machine learning, automatic drum classification, BPM detection, project saving, MIDI, or audio export.
+Current status: local audio slice workspace with manual editing, offline onset assistance, slice analysis, Slice Library curation, manual pattern playback, Seed-reproducible Pattern generation, Event Probability, Pattern Swing, Microtiming, Ratchet, Reverse, Granular Burst, deterministic IDM Transform, project persistence, and WAV export. It does not use AI, machine learning, automatic drum classification, BPM detection, cloud projects, autosave, MIDI export, MP3 export, or arrangement mode.
 
 ## Offline Principle
 
@@ -37,6 +37,8 @@ npm run dev
 - `npm run test:sequencer`: run focused sequencer model, scheduling, and UI tests.
 - `npm run test:generator`: run focused PRNG, generator, grammar, mutation, evaluation, and generator UI tests.
 - `npm run test:idm`: run focused Probability, Timing, Ratchet, Reverse, Granular, IDM Transform, and transform evaluation tests.
+- `npm run test:project`: run focused project schema, portable container, and dirty-state tests.
+- `npm run test:export`: run focused offline render, WAV encoder, stem, Slice export, and export evaluation tests.
 - `npm run build`: build production main, preload, and renderer assets.
 - `npm run dist:win`: create Windows distributables with electron-builder.
 
@@ -55,6 +57,12 @@ Build outputs are staged in a unique temporary directory, smoke-checked from the
 Version work begins with a GitHub Issue, proceeds on a feature branch, and lands through a Pull Request into `main`. Use conventional commits and reference the version Issue in relevant commits and PRs.
 
 The CI workflow runs install, lint, formatting check, type checking, tests, production build, and Windows packaging verification.
+
+## Project and WAV Export
+
+Linked `.drumproj` files store UTF-8 JSON project state plus exact source references and SHA-256 fingerprints. Portable `.drumz` files store a custom binary container with `DRUMZ001` magic, a JSON manifest, and the original encoded WAV or MP3 bytes. Project opening verifies source identity before restoring markers, valid Slice analysis, Pattern, Generator settings, IDM settings, Event transforms, locks, and master gain.
+
+Offline export renders the current Pattern without realtime recording. Seamless Loop creates a one-cycle loop render. Performance Render creates multi-loop output with optional tail. WAV export supports 16-bit and 24-bit stereo PCM at the selected output sample rate, stereo mix, LOW/MID/HIGH/TEXTURE stems, mix-and-stems, and selected Slice WAV export.
 
 ## Interface Localization
 

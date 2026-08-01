@@ -200,7 +200,7 @@ export const scheduleWindow = (input: ScheduleWindowInput): ScheduleWindowResult
     };
   }
 
-  const seed = input.seed ?? 'drumulizer-080';
+  const seed = input.seed ?? 'drumulizer-090';
   const scheduleLead = dynamicScheduleAheadSeconds(input.pattern);
   const firstLoop = Math.max(
     0,

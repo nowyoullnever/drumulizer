@@ -48,3 +48,11 @@ Rules:
 - Slice editor model, constraints, zero-crossing logic, and edit history live in `src/renderer/slice/`.
 - Pattern generation must stay inside `src/renderer/sequencer/generator/` and must not import Electron, Node runtime modules, network clients, or audio playback services.
 - Renderer-localized copy lives in `src/renderer/i18n/`; main/preload should return stable codes for user-facing failures.
+
+## v0.9.0 Additions
+
+- `src/main/sourceRegistry.ts`: Main-process source token registry.
+- `src/main/projectHandlers.ts`: project, portable, relink, and export IPC.
+- `src/shared/project/`: schema validation and portable container codec.
+- `src/renderer/project/projectState.ts`: explicit creative snapshot serialization.
+- `src/renderer/export/`: offline rendering and WAV encoding.

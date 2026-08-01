@@ -97,3 +97,7 @@ Full-file loop mode uses the source node loop flag. Pattern loop mode belongs to
 ## Cleanup
 
 Replacing or clearing a source stops playback and audition, disconnects source nodes, invalidates stale imports and onset previews, clears waveform references, resets the cursor, resets slice markers/history, and avoids keeping raw import bytes after successful decode. Failed replacement preserves the previous decoded source and slice edit state.
+
+## v0.9.0 Offline Export
+
+The Main process owns source registration, source hashing, project files, and export file writes. The Renderer owns decoded audio buffers and prepares deterministic offline Float32 renders from the Sequencer planner before passing WAV bytes to a narrow export-write IPC.

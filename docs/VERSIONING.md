@@ -10,7 +10,7 @@ Drumulizer uses semantic versioning during staged product development.
 - v0.6.0: Manual sequencer and accurate Web Audio scheduling
 - v0.7.0: Deterministic rule-based Pattern generation, mutation, and robust staged Windows packaging
 - v0.8.0: IDM Event transformations and selective Granular playback
-- v0.9.0: Save, export, and release publishing
+- v0.9.0: Project persistence and deterministic offline WAV export
 - v1.0.0: First stable release
 
 Patch versions are reserved for fixes within an already shipped feature area, for example:
