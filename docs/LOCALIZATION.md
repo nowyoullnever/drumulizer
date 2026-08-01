@@ -10,6 +10,10 @@ New Slice Analysis and Slice Library strings are present in both Korean and Engl
 
 Pattern Generator strings are present in both Korean and English. This includes Seed controls, Density, Variation, Breakage, Generation Mode, Generation Scope, Generate, Regenerate, Mutate, Event locks, Lane generation locks, Event origin labels, disabled reasons, and generation summaries.
 
+## v0.8.0 Copy Areas
+
+IDM Transform strings are present in both Korean and English. This includes Swing, Probability, Microtiming, Ratchet, Reverse, Granular, Grain controls, Apply, Mutate, Reset, Event Transform controls, summaries, and no-change messages.
+
 ## Locale Flow
 
 - Supported locales: `ko`, `en`
@@ -28,7 +32,7 @@ Main and preload code must not return localized user messages. Local file import
 
 ## Test Coverage
 
-The test suite checks dictionary key parity, locale detection and persistence, keyboard-accessible language switching, source metadata preservation while switching language, slice-editor copy, onset-analysis copy, generator copy, localized app status states, and absence of the retired bottom status strip metrics.
+The test suite checks dictionary key parity, locale detection and persistence, keyboard-accessible language switching, source metadata preservation while switching language, slice-editor copy, onset-analysis copy, generator copy, IDM copy, localized app status states, and absence of the retired bottom status strip metrics.
 
 ## v0.4.0 Copy Areas
 

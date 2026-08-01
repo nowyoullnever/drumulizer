@@ -14,6 +14,13 @@
 - `scripts/package-windows.mjs`: staged Windows packaging, smoke launch, artifact copy, and cleanup wrapper.
 - `docs/PATTERN_GENERATOR.md`, `docs/PATTERN_GRAMMAR.md`, `docs/PATTERN_MUTATION.md`, `docs/GENERATOR_EVALUATION.md`, and `docs/WINDOWS_PACKAGING.md`: v0.7.0 feature and release documentation.
 
+## v0.8.0 Additions
+
+- `src/renderer/sequencer/transform/`: deterministic IDM Transform engine.
+- `src/renderer/sequencer/reverseBufferCache.ts`: bounded reversed-Slice buffer cache.
+- `src/renderer/tests/*probability*`, `timing`, `ratchet`, `reverse`, `granular`, `idmTransform`, and `transformEvaluation`: focused transform coverage.
+- `docs/IDM_TRANSFORM.md`, `docs/EVENT_PROBABILITY.md`, `docs/SWING_AND_MICROTIMING.md`, `docs/RATCHET.md`, `docs/REVERSE_PLAYBACK.md`, `docs/GRANULAR_EVENT.md`, and `docs/TRANSFORM_EVALUATION.md`: v0.8.0 docs.
+
 ```text
 src/
   main/                 Electron app lifecycle, BrowserWindow, and security policy

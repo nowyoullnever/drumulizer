@@ -16,6 +16,10 @@ Pattern generation is renderer-local rule logic over committed slices and slice-
 
 The generator is disabled when analysis is stale, when Pattern transport is not stopped, or when no eligible nonexcluded Slice is available. Event locks and Lane generation locks are model data, not audio-engine state.
 
+## v0.8.0 Event Transforms
+
+Event transforms remain serializable Pattern data. Probability, Swing, Microtiming, Ratchet, Reverse, and Granular planning happen before AudioNode creation. Reverse playback uses a renderer-runtime reversed-buffer cache; reversed AudioBuffers are not stored in React state. Granular Events schedule bounded short source voices from the assigned Slice rather than creating a continuous synth.
+
 ## AudioContext Lifecycle
 
 The renderer lazily creates one shared `AudioContext` after a user gesture. The context is resumed before decoding, full-file playback, slice audition, or candidate audition if it is suspended.
@@ -74,7 +78,7 @@ AudioContext.destination
 
 Each sequencer event schedules a fresh source node against `AudioContext.currentTime`. Event velocity, lane gain, and master gain are combined into the event gain plan; pan uses `StereoPannerNode` when available; pitch uses source playback rate. Short gain fades are automated per event to avoid clicks at slice boundaries.
 
-The scheduler uses a deterministic look-ahead window. JavaScript timers only ask the engine to schedule the next window; actual event starts are Web Audio times. Scheduled event keys include loop index and event id so loop boundaries do not double-schedule. The engine caps active voices and stops all voices on pause, stop, source replacement, or source clear.
+The scheduler uses a deterministic look-ahead window. JavaScript timers only ask the engine to schedule the next window; actual event starts are Web Audio times. Scheduled voice keys include loop index, event id, Ratchet index, and Grain index so loop boundaries do not double-schedule. The engine caps active voices and stops all voices on pause, stop, source replacement, or source clear.
 
 ## Onset Analysis Worker
 

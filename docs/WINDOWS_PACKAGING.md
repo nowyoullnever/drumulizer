@@ -14,7 +14,7 @@ The packaging wrapper looks for `win-unpacked/Drumulizer.exe`, starts it, waits 
 
 ## Publishing
 
-CI and local packaging use `--publish never`. v0.7.0 does not create GitHub Releases automatically.
+CI and local packaging use `--publish never`. v0.8.0 does not create GitHub Releases automatically.
 
 ## Outputs
 

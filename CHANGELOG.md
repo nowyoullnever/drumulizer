@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.8.0] - 2026-08-01
+
+### Added
+
+- Deterministic per-loop Event Probability
+- Pattern Swing and tempo-relative Event Microtiming
+- One-to-four-trigger Event Ratchets with Velocity Decay
+- Non-destructive reversed-Slice playback
+- Selective Event-based Granular Burst playback
+- Grain Size, Count, Position, Spray, and Pitch Jitter controls
+- Deterministic IDM Transform and IDM mutation actions
+- Automatic IDM transformation after Pattern generation
+- Event transformation indicators and IDM Event Inspector controls
+- Reverse-buffer cache and expanded scheduler evaluation
+- Korean and English IDM transformation interface
+
+### Changed
+
+- Sequencer scheduling now supports early and late transformed Event times.
+- Pattern generation can produce transformed IDM Events in one history action.
+
 ## [0.7.0] - 2026-07-30
 
 ### Added

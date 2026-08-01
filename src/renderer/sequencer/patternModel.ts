@@ -1,22 +1,52 @@
 import {
   DEFAULT_EVENT_PAN,
   DEFAULT_EVENT_PITCH_SEMITONES,
+  DEFAULT_EVENT_PROBABILITY,
+  DEFAULT_EVENT_GRAIN_COUNT,
+  DEFAULT_EVENT_GRAIN_PITCH_JITTER_SEMITONES,
+  DEFAULT_EVENT_GRAIN_POSITION,
+  DEFAULT_EVENT_GRAIN_SIZE_MS,
+  DEFAULT_EVENT_GRAIN_SPRAY,
+  DEFAULT_EVENT_RATCHET_COUNT,
+  DEFAULT_EVENT_RATCHET_DECAY,
+  DEFAULT_EVENT_TIMING_OFFSET_STEPS,
   DEFAULT_EVENT_VELOCITY,
   DEFAULT_PATTERN_BARS,
   DEFAULT_PATTERN_BPM,
+  DEFAULT_PATTERN_SWING,
   MAX_EVENT_PAN,
   MAX_EVENT_PITCH_SEMITONES,
+  MAX_EVENT_PROBABILITY,
+  MAX_EVENT_GRAIN_COUNT,
+  MAX_EVENT_GRAIN_PITCH_JITTER_SEMITONES,
+  MAX_EVENT_GRAIN_POSITION,
+  MAX_EVENT_GRAIN_SIZE_MS,
+  MAX_EVENT_GRAIN_SPRAY,
+  MAX_EVENT_RATCHET_COUNT,
+  MAX_EVENT_RATCHET_DECAY,
+  MAX_EVENT_TIMING_OFFSET_STEPS,
   MAX_EVENT_VELOCITY,
   MAX_LANE_GAIN_DB,
   MAX_PATTERN_BARS,
   MAX_PATTERN_BPM,
   MAX_PATTERN_EVENTS,
+  MAX_PATTERN_SWING,
   MIN_EVENT_PAN,
   MIN_EVENT_PITCH_SEMITONES,
+  MIN_EVENT_PROBABILITY,
+  MIN_EVENT_GRAIN_COUNT,
+  MIN_EVENT_GRAIN_PITCH_JITTER_SEMITONES,
+  MIN_EVENT_GRAIN_POSITION,
+  MIN_EVENT_GRAIN_SIZE_MS,
+  MIN_EVENT_GRAIN_SPRAY,
+  MIN_EVENT_RATCHET_COUNT,
+  MIN_EVENT_RATCHET_DECAY,
+  MIN_EVENT_TIMING_OFFSET_STEPS,
   MIN_EVENT_VELOCITY,
   MIN_LANE_GAIN_DB,
   MIN_PATTERN_BARS,
   MIN_PATTERN_BPM,
+  MIN_PATTERN_SWING,
   SEQUENCER_BEATS_PER_BAR,
   SEQUENCER_STEPS_PER_BAR,
   SEQUENCER_STEPS_PER_BEAT,
@@ -24,8 +54,10 @@ import {
 import type { SliceRegion } from '../slice/types';
 import type {
   PatternEditResult,
+  SequencerEventTransform,
   SequencerEvent,
   SequencerEventOrigin,
+  EventPlaybackMode,
   SequencerLaneId,
   SequencerLaneState,
   SequencerPattern,
@@ -53,6 +85,7 @@ export const createDefaultPattern = (): SequencerPattern => ({
   bars: DEFAULT_PATTERN_BARS,
   beatsPerBar: SEQUENCER_BEATS_PER_BAR,
   stepsPerBeat: SEQUENCER_STEPS_PER_BEAT,
+  swing: DEFAULT_PATTERN_SWING,
   events: [],
   lanes: createDefaultLanes(),
   loopEnabled: true,
@@ -63,6 +96,88 @@ export const createEventId = (laneId: SequencerLaneId, stepIndex: number): strin
 
 export const validEventOrigin = (origin: unknown): SequencerEventOrigin =>
   origin === 'generated' || origin === 'mutated' ? origin : 'manual';
+
+export const validPlaybackMode = (mode: unknown): EventPlaybackMode =>
+  mode === 'granular' ? 'granular' : 'slice';
+
+export const DEFAULT_EVENT_TRANSFORM: SequencerEventTransform = {
+  probability: DEFAULT_EVENT_PROBABILITY,
+  timingOffsetSteps: DEFAULT_EVENT_TIMING_OFFSET_STEPS,
+  ratchetCount: DEFAULT_EVENT_RATCHET_COUNT,
+  ratchetDecay: DEFAULT_EVENT_RATCHET_DECAY,
+  reverse: false,
+  playbackMode: 'slice',
+  grainSizeMs: DEFAULT_EVENT_GRAIN_SIZE_MS,
+  grainCount: DEFAULT_EVENT_GRAIN_COUNT,
+  grainPosition: DEFAULT_EVENT_GRAIN_POSITION,
+  grainSpray: DEFAULT_EVENT_GRAIN_SPRAY,
+  grainPitchJitterSemitones: DEFAULT_EVENT_GRAIN_PITCH_JITTER_SEMITONES,
+};
+
+export const normalizeEventTransform = (
+  transform: Partial<SequencerEventTransform> | undefined,
+): SequencerEventTransform => ({
+  probability: clampFinite(
+    transform?.probability ?? DEFAULT_EVENT_PROBABILITY,
+    MIN_EVENT_PROBABILITY,
+    MAX_EVENT_PROBABILITY,
+    DEFAULT_EVENT_PROBABILITY,
+  ),
+  timingOffsetSteps: clampFinite(
+    transform?.timingOffsetSteps ?? DEFAULT_EVENT_TIMING_OFFSET_STEPS,
+    MIN_EVENT_TIMING_OFFSET_STEPS,
+    MAX_EVENT_TIMING_OFFSET_STEPS,
+    DEFAULT_EVENT_TIMING_OFFSET_STEPS,
+  ),
+  ratchetCount: Math.round(
+    clampFinite(
+      transform?.ratchetCount ?? DEFAULT_EVENT_RATCHET_COUNT,
+      MIN_EVENT_RATCHET_COUNT,
+      MAX_EVENT_RATCHET_COUNT,
+      DEFAULT_EVENT_RATCHET_COUNT,
+    ),
+  ),
+  ratchetDecay: clampFinite(
+    transform?.ratchetDecay ?? DEFAULT_EVENT_RATCHET_DECAY,
+    MIN_EVENT_RATCHET_DECAY,
+    MAX_EVENT_RATCHET_DECAY,
+    DEFAULT_EVENT_RATCHET_DECAY,
+  ),
+  reverse: Boolean(transform?.reverse),
+  playbackMode: validPlaybackMode(transform?.playbackMode),
+  grainSizeMs: clampFinite(
+    transform?.grainSizeMs ?? DEFAULT_EVENT_GRAIN_SIZE_MS,
+    MIN_EVENT_GRAIN_SIZE_MS,
+    MAX_EVENT_GRAIN_SIZE_MS,
+    DEFAULT_EVENT_GRAIN_SIZE_MS,
+  ),
+  grainCount: Math.round(
+    clampFinite(
+      transform?.grainCount ?? DEFAULT_EVENT_GRAIN_COUNT,
+      MIN_EVENT_GRAIN_COUNT,
+      MAX_EVENT_GRAIN_COUNT,
+      DEFAULT_EVENT_GRAIN_COUNT,
+    ),
+  ),
+  grainPosition: clampFinite(
+    transform?.grainPosition ?? DEFAULT_EVENT_GRAIN_POSITION,
+    MIN_EVENT_GRAIN_POSITION,
+    MAX_EVENT_GRAIN_POSITION,
+    DEFAULT_EVENT_GRAIN_POSITION,
+  ),
+  grainSpray: clampFinite(
+    transform?.grainSpray ?? DEFAULT_EVENT_GRAIN_SPRAY,
+    MIN_EVENT_GRAIN_SPRAY,
+    MAX_EVENT_GRAIN_SPRAY,
+    DEFAULT_EVENT_GRAIN_SPRAY,
+  ),
+  grainPitchJitterSemitones: clampFinite(
+    transform?.grainPitchJitterSemitones ?? DEFAULT_EVENT_GRAIN_PITCH_JITTER_SEMITONES,
+    MIN_EVENT_GRAIN_PITCH_JITTER_SEMITONES,
+    MAX_EVENT_GRAIN_PITCH_JITTER_SEMITONES,
+    DEFAULT_EVENT_GRAIN_PITCH_JITTER_SEMITONES,
+  ),
+});
 
 export const sortEvents = (events: SequencerEvent[]): SequencerEvent[] =>
   [...events].sort(
@@ -93,6 +208,7 @@ export const clampEvent = (
   ),
   origin: validEventOrigin(event.origin),
   locked: Boolean(event.locked),
+  transform: normalizeEventTransform(event.transform),
 });
 
 export const normalizePattern = (pattern: SequencerPattern): SequencerPattern => {
@@ -101,6 +217,12 @@ export const normalizePattern = (pattern: SequencerPattern): SequencerPattern =>
   );
   const bpm = Math.round(
     clampFinite(pattern.bpm, MIN_PATTERN_BPM, MAX_PATTERN_BPM, DEFAULT_PATTERN_BPM),
+  );
+  const swing = clampFinite(
+    pattern.swing ?? DEFAULT_PATTERN_SWING,
+    MIN_PATTERN_SWING,
+    MAX_PATTERN_SWING,
+    DEFAULT_PATTERN_SWING,
   );
   const steps = bars * SEQUENCER_STEPS_PER_BAR;
   const seen = new Set<string>();
@@ -137,6 +259,7 @@ export const normalizePattern = (pattern: SequencerPattern): SequencerPattern =>
     bars,
     beatsPerBar: SEQUENCER_BEATS_PER_BAR,
     stepsPerBeat: SEQUENCER_STEPS_PER_BEAT,
+    swing,
     events,
     lanes,
     loopEnabled: Boolean(pattern.loopEnabled),
@@ -177,6 +300,7 @@ export const paintEvent = (input: {
         pitchSemitones: DEFAULT_EVENT_PITCH_SEMITONES,
         origin: 'manual',
         locked: false,
+        transform: DEFAULT_EVENT_TRANSFORM,
       };
   const events = existing
     ? input.pattern.events.map((candidate) => (candidate.id === existing.id ? event : candidate))
@@ -211,7 +335,10 @@ export const updateEvent = (
   pattern: SequencerPattern,
   eventId: string,
   patch: Partial<
-    Pick<SequencerEvent, 'velocity' | 'pan' | 'pitchSemitones' | 'sliceId' | 'origin' | 'locked'>
+    Pick<
+      SequencerEvent,
+      'velocity' | 'pan' | 'pitchSemitones' | 'sliceId' | 'origin' | 'locked' | 'transform'
+    >
   >,
 ): PatternEditResult => {
   let changed = false;
@@ -243,6 +370,7 @@ export const resetEventParameters = (
     pan: DEFAULT_EVENT_PAN,
     pitchSemitones: DEFAULT_EVENT_PITCH_SEMITONES,
     origin: 'manual',
+    transform: DEFAULT_EVENT_TRANSFORM,
   });
 
 export const setLaneState = (
@@ -301,6 +429,9 @@ export const setPatternBars = (
 
 export const setPatternBpm = (pattern: SequencerPattern, bpm: number): SequencerPattern =>
   normalizePattern({ ...pattern, bpm });
+
+export const setPatternSwing = (pattern: SequencerPattern, swing: number): SequencerPattern =>
+  normalizePattern({ ...pattern, swing });
 
 export const reconcilePatternSlices = (input: {
   pattern: SequencerPattern;

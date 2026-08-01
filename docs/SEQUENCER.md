@@ -24,6 +24,10 @@ Manual edits claim manual Event ownership. Event locks protect individual Events
 
 The Pattern Generator is local and deterministic. Generate respects the selected mode and scope. Regenerate replaces all unlocked in-scope generated material. Mutate derives the next deterministic variation from the Seed and mutation index. Generation is disabled while Pattern transport is playing or paused, while Slice analysis is stale, or when no eligible Slice exists.
 
+## IDM Transform
+
+v0.8.0 extends Events with Probability, Microtiming, Ratchet, Reverse, and Granular playback mode. Pattern Swing is stored on the Pattern. IDM Transform actions decorate Event transforms without changing Lane, Step, or Slice assignment. Event locks, Lane generation locks, scope, and mode protect existing work.
+
 ## Slice Reconciliation
 
 Events keep stable slice ids. When a source is replaced, cleared, or slice boundaries change, the pattern is reconciled against the current slice set. Events with missing slice references are removed and the selected event is cleared if necessary.
@@ -32,4 +36,4 @@ Events keep stable slice ids. When a source is replaced, cleared, or slice bound
 
 `SequencerEngine` uses a Web Audio look-ahead scheduler. Timer ticks prepare events in a short future window, but event starts are scheduled with `AudioContext` time. Scheduled keys combine loop index and event id so loop boundaries do not duplicate events. Event gain is derived from velocity, lane gain, and master gain; pan and pitch are applied at event scheduling time.
 
-The scheduler deliberately excludes BPM detection, swing, humanize, probability playback, MIDI, save/load, and export in v0.7.0. Generated Events are scheduled through the same Web Audio path as manual Events.
+The scheduler deliberately excludes BPM detection, humanize, MIDI, save/load, export, time stretching, and master effects in v0.8.0. Generated and transformed Events are scheduled through the same Web Audio path as manual Events.

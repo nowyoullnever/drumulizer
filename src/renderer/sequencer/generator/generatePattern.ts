@@ -7,7 +7,13 @@ import {
   MIN_EVENT_PITCH_SEMITONES,
   MIN_EVENT_VELOCITY,
 } from '../../../shared/constants/sequencer';
-import { clampFinite, laneStepKey, normalizePattern, sortEvents } from '../patternModel';
+import {
+  DEFAULT_EVENT_TRANSFORM,
+  clampFinite,
+  laneStepKey,
+  normalizePattern,
+  sortEvents,
+} from '../patternModel';
 import type { SequencerEvent, SequencerLaneId, SequencerPattern } from '../types';
 import { sequencerLaneOrder } from '../types';
 import type { GenerationResult, GeneratorActionInput, GenerationSummary } from './generatorTypes';
@@ -194,6 +200,7 @@ export const generatePattern = (input: GeneratorActionInput): GenerationResult =
         pitchSemitones: generatedPitch(laneId, settings.variation, prng),
         origin: 'generated',
         locked: false,
+        transform: DEFAULT_EVENT_TRANSFORM,
       };
       generated.push(event);
       occupied.add(key);

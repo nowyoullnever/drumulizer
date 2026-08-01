@@ -36,7 +36,10 @@ export const evaluateScheduler = (input: {
   );
   const expected = validAudibleEvents.length * (input.pattern.loopEnabled ? input.loopCount : 1);
   const scheduledUnique = new Set(
-    result.scheduled.map((event) => `${event.loopIndex}:${event.eventId}:${event.stepIndex}`),
+    result.scheduled.map(
+      (event) =>
+        `${event.loopIndex}:${event.eventId}:${event.stepIndex}:${event.ratchetIndex}:${event.grainIndex ?? 'slice'}`,
+    ),
   );
   return {
     expectedEventCount: expected,

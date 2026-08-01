@@ -7,7 +7,7 @@ describe('preload api', () => {
     expect(Object.keys(api)).toEqual(['getAppInfo', 'selectLocalAudioFile']);
     expect(api.getAppInfo()).toEqual({
       name: 'Drumulizer',
-      version: '0.7.0',
+      version: '0.8.0',
       platform: 'win32',
     });
     expect(typeof api.selectLocalAudioFile).toBe('function');
