@@ -25,6 +25,7 @@ import type { SliceRegion } from '../slice/types';
 import type {
   PatternEditResult,
   SequencerEvent,
+  SequencerEventOrigin,
   SequencerLaneId,
   SequencerLaneState,
   SequencerPattern,
@@ -41,7 +42,10 @@ export const clampFinite = (value: number, min: number, max: number, fallback: n
 
 export const createDefaultLanes = (): Record<SequencerLaneId, SequencerLaneState> =>
   Object.fromEntries(
-    sequencerLaneOrder.map((id) => [id, { id, gainDb: 0, muted: false, soloed: false }]),
+    sequencerLaneOrder.map((id) => [
+      id,
+      { id, gainDb: 0, muted: false, soloed: false, generationLocked: false },
+    ]),
   ) as Record<SequencerLaneId, SequencerLaneState>;
 
 export const createDefaultPattern = (): SequencerPattern => ({
@@ -56,6 +60,9 @@ export const createDefaultPattern = (): SequencerPattern => ({
 
 export const createEventId = (laneId: SequencerLaneId, stepIndex: number): string =>
   `evt-${laneId}-${stepIndex.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+export const validEventOrigin = (origin: unknown): SequencerEventOrigin =>
+  origin === 'generated' || origin === 'mutated' ? origin : 'manual';
 
 export const sortEvents = (events: SequencerEvent[]): SequencerEvent[] =>
   [...events].sort(
@@ -84,6 +91,8 @@ export const clampEvent = (
     MAX_EVENT_PITCH_SEMITONES,
     DEFAULT_EVENT_PITCH_SEMITONES,
   ),
+  origin: validEventOrigin(event.origin),
+  locked: Boolean(event.locked),
 });
 
 export const normalizePattern = (pattern: SequencerPattern): SequencerPattern => {
@@ -120,6 +129,7 @@ export const normalizePattern = (pattern: SequencerPattern): SequencerPattern =>
       gainDb: clampFinite(pattern.lanes[id]?.gainDb ?? 0, MIN_LANE_GAIN_DB, MAX_LANE_GAIN_DB, 0),
       muted: Boolean(pattern.lanes[id]?.muted),
       soloed: Boolean(pattern.lanes[id]?.soloed),
+      generationLocked: Boolean(pattern.lanes[id]?.generationLocked),
     };
   }
   return {
@@ -156,7 +166,7 @@ export const paintEvent = (input: {
   }
   const existing = findEventAt(input.pattern, input.laneId, stepIndex);
   const event: SequencerEvent = existing
-    ? { ...existing, sliceId: input.sliceId }
+    ? { ...existing, sliceId: input.sliceId, origin: 'manual' }
     : {
         id: createEventId(input.laneId, stepIndex),
         laneId: input.laneId,
@@ -165,6 +175,8 @@ export const paintEvent = (input: {
         velocity: DEFAULT_EVENT_VELOCITY,
         pan: DEFAULT_EVENT_PAN,
         pitchSemitones: DEFAULT_EVENT_PITCH_SEMITONES,
+        origin: 'manual',
+        locked: false,
       };
   const events = existing
     ? input.pattern.events.map((candidate) => (candidate.id === existing.id ? event : candidate))
@@ -198,7 +210,9 @@ export const removeEventAt = (
 export const updateEvent = (
   pattern: SequencerPattern,
   eventId: string,
-  patch: Partial<Pick<SequencerEvent, 'velocity' | 'pan' | 'pitchSemitones' | 'sliceId'>>,
+  patch: Partial<
+    Pick<SequencerEvent, 'velocity' | 'pan' | 'pitchSemitones' | 'sliceId' | 'origin' | 'locked'>
+  >,
 ): PatternEditResult => {
   let changed = false;
   const events = pattern.events.map((event) => {
@@ -209,6 +223,17 @@ export const updateEvent = (
   return { pattern: { ...pattern, events: sortEvents(events) }, selectedEventId: eventId, changed };
 };
 
+export const setEventLock = (
+  pattern: SequencerPattern,
+  eventId: string,
+  locked: boolean,
+): PatternEditResult => updateEvent(pattern, eventId, { locked });
+
+export const setAllEventLocks = (pattern: SequencerPattern, locked: boolean): SequencerPattern => ({
+  ...pattern,
+  events: pattern.events.map((event) => ({ ...event, locked })),
+});
+
 export const resetEventParameters = (
   pattern: SequencerPattern,
   eventId: string,
@@ -217,6 +242,7 @@ export const resetEventParameters = (
     velocity: DEFAULT_EVENT_VELOCITY,
     pan: DEFAULT_EVENT_PAN,
     pitchSemitones: DEFAULT_EVENT_PITCH_SEMITONES,
+    origin: 'manual',
   });
 
 export const setLaneState = (

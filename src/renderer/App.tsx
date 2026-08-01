@@ -27,6 +27,8 @@ import {
   removeEvent,
   removeEventAt,
   resetEventParameters,
+  setAllEventLocks,
+  setEventLock,
   setLaneState,
   setPatternBars,
   setPatternBpm,
@@ -39,8 +41,19 @@ import {
   undoPatternHistory,
   type PatternHistory,
 } from './sequencer/history';
+import {
+  createDefaultGeneratorSettings,
+  createDefaultMutationState,
+  normalizeGeneratorSettings,
+  type GenerationSummary,
+} from './sequencer/generator/generatorTypes';
+import { generatePattern } from './sequencer/generator/generatePattern';
+import { mutatePattern } from './sequencer/generator/mutatePattern';
+import { generatorPrerequisites } from './sequencer/generator/generationDiagnostics';
 import type {
   MainWorkspaceMode,
+  PatternGeneratorSettings,
+  PatternMutationState,
   SequencerEvent,
   SequencerLaneId,
   SequencerSliceContext,
@@ -218,6 +231,13 @@ export function App() {
     stepIndex: number;
   }>({ laneId: 'low', stepIndex: 0 });
   const [patternMessage, setPatternMessage] = useState<string | null>(null);
+  const [generatorSettings, setGeneratorSettings] = useState<PatternGeneratorSettings>(() =>
+    createDefaultGeneratorSettings(),
+  );
+  const [mutationState, setMutationState] = useState<PatternMutationState>(() =>
+    createDefaultMutationState(),
+  );
+  const [generationSummary, setGenerationSummary] = useState<GenerationSummary | null>(null);
   const [patternHistory, setPatternHistory] = useState<PatternHistory>(() =>
     createPatternHistory(initialPatternState()),
   );
@@ -329,8 +349,10 @@ export function App() {
     setPatternHistory(createPatternHistory(initialPatternState()));
     setActiveSliceId(null);
     setPatternMessage(null);
+    setGenerationSummary(null);
+    setMutationState(createDefaultMutationState(generatorSettings.seed));
     setFocusedSequencerCell({ laneId: 'low', stepIndex: 0 });
-  }, []);
+  }, [generatorSettings.seed]);
 
   const pushPatternEdit = useCallback(
     (
@@ -1061,7 +1083,7 @@ export function App() {
       if (event.key === 'ArrowRight') {
         setPlayback(playbackEngine.seek(playback.positionSeconds + (event.shiftKey ? 5 : 0.5)));
       }
-      if (event.key.toLowerCase() === 'l') {
+      if (event.key.toLowerCase() === 'l' && workspaceMode !== 'sequencer') {
         setPlayback(playbackEngine.setLoop(!playback.loopEnabled));
       }
     };
@@ -1082,6 +1104,7 @@ export function App() {
     redo,
     sliceHistory.present.selectedMarkerId,
     undo,
+    workspaceMode,
   ]);
 
   const handleDrop = useCallback(
@@ -1152,6 +1175,30 @@ export function App() {
   const selectedEventContext = selectedEvent
     ? (sliceContextById[selectedEvent.sliceId] ?? null)
     : null;
+  const generatorSliceInput = useMemo(() => {
+    const currentAnalysis =
+      sliceAnalysisResult &&
+      sliceAnalysisResult.sourceId === metadata?.id &&
+      sliceAnalysisResult.sliceSetSignature === currentSliceSignature
+        ? sliceAnalysisResult
+        : null;
+    return {
+      slices,
+      analyses: currentAnalysis?.analyses ?? [],
+      annotations: sliceAnnotations,
+    };
+  }, [currentSliceSignature, metadata?.id, sliceAnalysisResult, sliceAnnotations, slices]);
+  const generatorStatus = useMemo(
+    () =>
+      generatorPrerequisites({
+        hasSource: Boolean(metadata),
+        slices,
+        lifecycle: sliceAnalysisLifecycle,
+        transport: sequencerTransport,
+        sliceInput: generatorSliceInput,
+      }),
+    [generatorSliceInput, metadata, sequencerTransport, sliceAnalysisLifecycle, slices],
+  );
 
   const editLocked = sequencerTransport.status !== 'stopped';
 
@@ -1206,6 +1253,15 @@ export function App() {
         setPatternMessage(t('sequencer.editLocked'));
         return;
       }
+      if (
+        patch.velocity !== undefined ||
+        patch.pan !== undefined ||
+        patch.pitchSemitones !== undefined
+      ) {
+        const claimed = updateEvent(pattern, eventId, { ...patch, origin: 'manual' });
+        if (claimed.changed) pushPatternEdit(claimed.pattern, claimed.selectedEventId);
+        return;
+      }
       const result = updateEvent(pattern, eventId, patch);
       if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
     },
@@ -1214,7 +1270,10 @@ export function App() {
 
   const replaceSelectedWithActiveSlice = useCallback(() => {
     if (editLocked || !selectedEvent || !activeSliceId) return;
-    const result = updateEvent(pattern, selectedEvent.id, { sliceId: activeSliceId });
+    const result = updateEvent(pattern, selectedEvent.id, {
+      sliceId: activeSliceId,
+      origin: 'manual',
+    });
     if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
   }, [activeSliceId, editLocked, pattern, pushPatternEdit, selectedEvent]);
 
@@ -1297,6 +1356,196 @@ export function App() {
     },
     [pattern, setPatternPresent],
   );
+
+  const setLaneGenerationLocked = useCallback(
+    (laneId: SequencerLaneId, generationLocked: boolean) => {
+      setPatternPresent(setLaneState(pattern, laneId, { generationLocked }));
+    },
+    [pattern, setPatternPresent],
+  );
+
+  const updateGeneratorSettings = useCallback((settings: PatternGeneratorSettings) => {
+    const normalized = normalizeGeneratorSettings(settings);
+    setGeneratorSettings(normalized);
+    setMutationState(createDefaultMutationState(normalized.seed));
+  }, []);
+
+  const applyGenerationResult = useCallback(
+    (result: ReturnType<typeof generatePattern>) => {
+      setGenerationSummary(result.summary);
+      setMutationState(result.mutationState);
+      if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+      else setPatternMessage(t('generator.noChange'));
+    },
+    [pushPatternEdit, t],
+  );
+
+  const generateCurrentPattern = useCallback(() => {
+    if (!generatorStatus.ready || editLocked) {
+      setPatternMessage(
+        t(
+          (generatorStatus.reasonKey ?? 'generator.reason.analysisNotReady') as Parameters<
+            typeof t
+          >[0],
+        ),
+      );
+      return;
+    }
+    applyGenerationResult(
+      generatePattern({
+        pattern,
+        selectedEventId: patternHistory.present.selectedEventId,
+        sliceInput: generatorSliceInput,
+        settings: generatorSettings,
+        mutationState,
+        action: 'generate',
+      }),
+    );
+  }, [
+    applyGenerationResult,
+    editLocked,
+    generatorSettings,
+    generatorSliceInput,
+    generatorStatus,
+    mutationState,
+    pattern,
+    patternHistory.present.selectedEventId,
+    t,
+  ]);
+
+  const regenerateUnlockedPattern = useCallback(() => {
+    if (!generatorStatus.ready || editLocked) {
+      setPatternMessage(
+        t(
+          (generatorStatus.reasonKey ?? 'generator.reason.analysisNotReady') as Parameters<
+            typeof t
+          >[0],
+        ),
+      );
+      return;
+    }
+    applyGenerationResult(
+      generatePattern({
+        pattern,
+        selectedEventId: patternHistory.present.selectedEventId,
+        sliceInput: generatorSliceInput,
+        settings: { ...generatorSettings, mode: 'replace-unlocked' },
+        mutationState,
+        action: 'regenerate',
+      }),
+    );
+  }, [
+    applyGenerationResult,
+    editLocked,
+    generatorSettings,
+    generatorSliceInput,
+    generatorStatus,
+    mutationState,
+    pattern,
+    patternHistory.present.selectedEventId,
+    t,
+  ]);
+
+  const mutateCurrentPattern = useCallback(() => {
+    if (!generatorStatus.ready || editLocked) {
+      setPatternMessage(
+        t(
+          (generatorStatus.reasonKey ?? 'generator.reason.analysisNotReady') as Parameters<
+            typeof t
+          >[0],
+        ),
+      );
+      return;
+    }
+    applyGenerationResult(
+      mutatePattern({
+        pattern,
+        selectedEventId: patternHistory.present.selectedEventId,
+        sliceInput: generatorSliceInput,
+        settings: generatorSettings,
+        mutationState,
+      }),
+    );
+  }, [
+    applyGenerationResult,
+    editLocked,
+    generatorSettings,
+    generatorSliceInput,
+    generatorStatus,
+    mutationState,
+    pattern,
+    patternHistory.present.selectedEventId,
+    t,
+  ]);
+
+  const randomizeSeed = useCallback(() => {
+    const bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    updateGeneratorSettings({
+      ...generatorSettings,
+      seed: Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(''),
+    });
+  }, [generatorSettings, updateGeneratorSettings]);
+
+  const copySeed = useCallback(() => {
+    void navigator.clipboard?.writeText(generatorSettings.seed);
+  }, [generatorSettings.seed]);
+
+  const resetGeneratorSettings = useCallback(() => {
+    updateGeneratorSettings(createDefaultGeneratorSettings());
+    setGenerationSummary(null);
+  }, [updateGeneratorSettings]);
+
+  const toggleSelectedEventLock = useCallback(() => {
+    if (editLocked || !selectedEvent) return;
+    const result = setEventLock(pattern, selectedEvent.id, !selectedEvent.locked);
+    if (result.changed) pushPatternEdit(result.pattern, result.selectedEventId);
+  }, [editLocked, pattern, pushPatternEdit, selectedEvent]);
+
+  const lockAllEvents = useCallback(() => {
+    if (editLocked) return;
+    if (!pattern.events.some((event) => !event.locked)) return;
+    pushPatternEdit(setAllEventLocks(pattern, true), patternHistory.present.selectedEventId);
+  }, [editLocked, pattern, patternHistory.present.selectedEventId, pushPatternEdit]);
+
+  const unlockAllEvents = useCallback(() => {
+    if (editLocked) return;
+    if (!pattern.events.some((event) => event.locked)) return;
+    pushPatternEdit(setAllEventLocks(pattern, false), patternHistory.present.selectedEventId);
+  }, [editLocked, pattern, patternHistory.present.selectedEventId, pushPatternEdit]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (workspaceMode !== 'sequencer' || isTextInputTarget(event.target)) return;
+      if (event.ctrlKey || event.altKey || event.metaKey) return;
+
+      const key = event.key.toLowerCase();
+      if (key === 'g') {
+        event.preventDefault();
+        if (event.shiftKey) regenerateUnlockedPattern();
+        else generateCurrentPattern();
+        return;
+      }
+      if (key === 'u') {
+        event.preventDefault();
+        mutateCurrentPattern();
+        return;
+      }
+      if (key === 'l') {
+        event.preventDefault();
+        toggleSelectedEventLock();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    generateCurrentPattern,
+    mutateCurrentPattern,
+    regenerateUnlockedPattern,
+    toggleSelectedEventLock,
+    workspaceMode,
+  ]);
 
   const changePatternBpm = useCallback(
     (bpm: number) => {
@@ -1574,6 +1823,11 @@ export function App() {
                   focusedLaneId={focusedSequencerCell.laneId}
                   focusedStepIndex={focusedSequencerCell.stepIndex}
                   masterGain={playback.masterGain}
+                  generatorSettings={generatorSettings}
+                  mutationState={mutationState}
+                  generatorReady={generatorStatus.ready}
+                  generatorReason={generatorStatus.reasonKey}
+                  generationSummary={generationSummary}
                   onToolChange={setSequencerTool}
                   onBpmChange={changePatternBpm}
                   onBarsChange={changePatternBars}
@@ -1600,6 +1854,7 @@ export function App() {
                   onLaneMute={setLaneMuted}
                   onLaneSolo={setLaneSoloed}
                   onLaneGain={setLaneGain}
+                  onLaneGenerationLock={setLaneGenerationLocked}
                   onClearLane={clearPatternLane}
                   onClearPattern={clearWholePattern}
                   onUndo={undoPattern}
@@ -1611,6 +1866,16 @@ export function App() {
                   onResetSelectedEvent={resetSelectedEvent}
                   onRemoveSelectedEvent={removeSelectedPatternEvent}
                   onAuditionSelectedEvent={auditionSelectedEvent}
+                  onGeneratorSettingsChange={updateGeneratorSettings}
+                  onGeneratePattern={generateCurrentPattern}
+                  onRegeneratePattern={regenerateUnlockedPattern}
+                  onMutatePattern={mutateCurrentPattern}
+                  onRandomizeSeed={randomizeSeed}
+                  onCopySeed={copySeed}
+                  onResetGeneratorSettings={resetGeneratorSettings}
+                  onToggleSelectedEventLock={toggleSelectedEventLock}
+                  onLockAllEvents={lockAllEvents}
+                  onUnlockAllEvents={unlockAllEvents}
                 />
                 {patternMessage ? (
                   <p className="analysis-panel__message">{patternMessage}</p>

@@ -10,6 +10,12 @@ Slice analysis uses the same local analysis-only mono PCM created during import.
 
 The sequencer stores a lightweight pattern model in renderer state. A pattern is fixed 4/4, uses sixteenth-note steps, supports 1-4 bars, and has LOW/MID/HIGH/TEXTURE lanes. Events reference existing `SliceRegion.id` values and carry velocity, pan, and pitch offsets. Pattern edits stay undoable in a dedicated history stack and are reconciled whenever slice boundaries or source identity change.
 
+## v0.7.0 Pattern Generator
+
+Pattern generation is renderer-local rule logic over committed slices and slice-analysis results. It does not create audio, does not run in the audio graph, and does not use machine learning or network services. Generated and mutated Events enter the same pattern model as manual Events, then the existing `SequencerEngine` schedules them with Web Audio time.
+
+The generator is disabled when analysis is stale, when Pattern transport is not stopped, or when no eligible nonexcluded Slice is available. Event locks and Lane generation locks are model data, not audio-engine state.
+
 ## AudioContext Lifecycle
 
 The renderer lazily creates one shared `AudioContext` after a user gesture. The context is resumed before decoding, full-file playback, slice audition, or candidate audition if it is suspended.
@@ -82,7 +88,7 @@ Playback position is derived from `AudioContext.currentTime`, source start conte
 
 ## Loop Behavior
 
-Full-file loop mode uses the source node loop flag. Pattern loop mode belongs to the sequencer and wraps the scheduler position at the pattern duration. Neither loop mode creates slice markers or automatic patterns.
+Full-file loop mode uses the source node loop flag. Pattern loop mode belongs to the sequencer and wraps the scheduler position at the pattern duration. Neither loop mode creates slice markers or changes generated patterns.
 
 ## Cleanup
 

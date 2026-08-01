@@ -6,6 +6,10 @@ Drumulizer combines 1970s avant-garde fashion graphics, saturated but faded prin
 
 The Slice Library keeps the same bordered modular pixel language while becoming a dense working surface. Role color is functional: low uses tomato, mid uses mustard, high uses cobalt, texture uses teal, and unclassified remains neutral. Cards are not nested; list rows, inspector blocks, and role summary chips are compact repeated items.
 
+## v0.7.0 Pattern Generator
+
+The Pattern Generator is a compact control surface, not a landing section. Seed, Density, Variation, Breakage, Generation Mode, Generation Scope, Generate, Regenerate, and Mutate live near the Sequencer grid. Generated, mutated, manual, Event-locked, and Lane-locked states must be visible without replacing the lane role colors.
+
 ## Palette
 
 Raw colors live in `src/renderer/styles/tokens.css`: paper, paper-light, ink, ink-soft, tomato, orange, mustard, cobalt, teal, violet, success, warning, and danger.
@@ -56,7 +60,7 @@ The primary shell exposes one noninteractive app status module in the header nex
 
 The language switch is a compact radio group. It should preserve the current workspace state when toggled and must not imply network mode changes.
 
-## Future Lane Mapping
+## Lane Mapping
 
 - LOW: tomato/orange with horizontal band pattern
 - MID: mustard with diagonal pattern

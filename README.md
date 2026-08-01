@@ -1,8 +1,8 @@
 # Drumulizer
 
-Drumulizer is a Windows desktop application for building a fully local, sample-based IDM drum-loop workflow. Version `0.6.0` adds a four-lane manual sequencer, slice-to-step placement, event velocity/pan/pitch controls, lane mute/solo/volume controls, and deterministic Web Audio look-ahead scheduling on top of local WAV/MP3 import, waveform playback, manual slice editing, offline onset preview, committed-slice analysis, and the Slice Library.
+Drumulizer is a Windows desktop application for building a fully local, sample-based IDM drum-loop workflow. Version `0.7.0` adds a deterministic, rule-based Pattern Generator that uses current Slice analysis and role-suitability scores to generate, regenerate, and mutate LOW/MID/HIGH/TEXTURE sequencer patterns.
 
-Current status: local audio slice workspace with manual editing, offline onset assistance, slice analysis, Slice Library curation, and manual pattern playback. It does not use AI, machine learning, automatic drum classification, BPM detection, automatic pattern generation, project saving, MIDI, or audio export.
+Current status: local audio slice workspace with manual editing, offline onset assistance, slice analysis, Slice Library curation, manual pattern playback, Seed-reproducible Pattern generation, Density/Variation/Breakage controls, Event locks, Lane generation locks, and manual-event preservation. It does not use AI, machine learning, automatic drum classification, BPM detection, probability playback, project saving, MIDI, or audio export.
 
 ## Offline Principle
 
@@ -35,6 +35,7 @@ npm run dev
 - `npm run test:onset`: run focused onset-analysis tests.
 - `npm run verify:onset`: run typecheck and focused onset-analysis tests.
 - `npm run test:sequencer`: run focused sequencer model, scheduling, and UI tests.
+- `npm run test:generator`: run focused PRNG, generator, grammar, mutation, evaluation, and generator UI tests.
 - `npm run build`: build production main, preload, and renderer assets.
 - `npm run dist:win`: create Windows distributables with electron-builder.
 
@@ -46,7 +47,7 @@ Run:
 npm run dist:win
 ```
 
-Build outputs are written to `release/` and ignored by Git. Packaging uses `--publish never`, so it must not create a GitHub Release, upload artifacts, or require `GH_TOKEN`.
+Build outputs are staged in a unique temporary directory, smoke-checked from the staged unpacked app, then copied to stable `release/` and `outputs/` paths. Packaging uses `--publish never`, so it must not create a GitHub Release, upload artifacts, or require `GH_TOKEN`.
 
 ## Repository Workflow
 
@@ -72,7 +73,9 @@ The v0.4.0 detector runs locally in a renderer worker. It uses deterministic mul
 
 The v0.5.0 slice analyzer runs locally in a renderer worker against committed `SliceRegion[]`. It computes raw DSP features, robust per-source normalization, micro-role scores, independent low/mid/high/texture lane scores, automatic primary role, confidence, warnings, and generation recommendations. The Slice Library can filter, sort, inspect, override, and exclude slices without changing marker boundaries.
 
-The v0.6.0 sequencer is manual only. Users choose an active slice from the Slice Library or slice editor, place events on LOW/MID/HIGH/TEXTURE lanes, edit per-event velocity, pan, and pitch, and play the pattern with a Web Audio look-ahead scheduler. Patterns are fixed 4/4 sixteenth-note grids from 1 to 4 bars at 40-240 BPM. The sequencer does not generate rhythms automatically and does not detect tempo.
+The v0.6.0 sequencer introduced manual event placement. v0.7.0 adds a deterministic local Pattern Generator on top of the same LOW/MID/HIGH/TEXTURE grid. Users can generate, regenerate unlocked material, mutate by Seed, lock Events or Lanes, edit per-event velocity, pan, and pitch, and play the result with a Web Audio look-ahead scheduler. Patterns remain fixed 4/4 sixteenth-note grids from 1 to 4 bars at 40-240 BPM. The sequencer still does not detect tempo, infer beats, or use network generation.
+
+The v0.7.0 Pattern Generator requires current Slice analysis. It normalizes the visible Seed, uses an internal deterministic PRNG, builds lane-specific weighted Slice pools, applies lane grammar, and produces ordinary Sequencer Events with `manual`, `generated`, or `mutated` origin. Generate preserves manual Events by default, Regenerate can replace unlocked Events, and Mutate advances a deterministic mutation index. Event locks and Lane generation locks protect useful work while manual editing remains available when transport is stopped.
 
 Preview candidates can be selected on the waveform, navigated with Previous/Next buttons or `,` and `.` shortcuts, and auditioned with a short 20ms pre-roll and 120ms post window. Candidate confidence, dominant band, and supporting feature count are shown as diagnostics, not as instrument labels.
 
@@ -80,4 +83,4 @@ Replace mode substitutes editable internal markers with detected markers. Merge 
 
 ## Planned Direction
 
-Future versions will add HPSS-derived slices, IDM pattern generation, granular processing, project saves, and WAV/stem export.
+Future versions will add HPSS-derived slices, granular processing, project saves, and WAV/stem export.
