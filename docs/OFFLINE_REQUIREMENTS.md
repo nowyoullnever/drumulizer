@@ -6,11 +6,15 @@ The built Drumulizer application must run without internet access and must not i
 
 Slice analysis is deterministic local DSP. It does not call network APIs, fetch remote models, use telemetry, perform HPSS/source separation, classify instruments by name, infer BPM, create beat grids, or generate patterns.
 
+## v0.7.0
+
+Pattern generation and mutation are deterministic local rule logic. They do not call network APIs, fetch remote models, use AI services, perform cloud inference, inspect online examples, or send Seed, slice metadata, filenames, audio, Events, or analysis data outside the renderer.
+
 ## Production
 
 Production blocks outgoing HTTP and HTTPS requests from the Electron session. The app does not use remote APIs, cloud AI, machine learning services, telemetry, analytics, crash-reporting services, CDNs, online font loading, remote images, remote stylesheets, automatic updates, remote configuration, feature flags, online authentication, or remote license checks. There is no remote URL import field, browser component, network client, or remote media loader.
 
-Onset detection is deterministic DSP running in a local renderer worker. It does not send audio, filenames, metadata, candidate information, or analysis metrics to any remote service.
+Onset detection is deterministic DSP running in a local renderer worker. Pattern generation is deterministic renderer logic over committed slices and local analysis results. Neither path sends audio, filenames, metadata, candidate information, Events, Seeds, or analysis metrics to any remote service.
 
 The UI does not need persistent offline-mode badges to satisfy this rule. Offline behavior is enforced by architecture and security policy, while user-facing status is limited to the current app state.
 

@@ -6,6 +6,10 @@ Drumulizer v0.4.0 includes internal Korean and English renderer localization.
 
 New Slice Analysis and Slice Library strings are present in both Korean and English. This includes lifecycle labels, role labels, filters, sorting labels, override/exclusion controls, recommendation text, and feature inspector labels.
 
+## v0.7.0 Copy Areas
+
+Pattern Generator strings are present in both Korean and English. This includes Seed controls, Density, Variation, Breakage, Generation Mode, Generation Scope, Generate, Regenerate, Mutate, Event locks, Lane generation locks, Event origin labels, disabled reasons, and generation summaries.
+
 ## Locale Flow
 
 - Supported locales: `ko`, `en`
@@ -24,7 +28,7 @@ Main and preload code must not return localized user messages. Local file import
 
 ## Test Coverage
 
-The test suite checks dictionary key parity, locale detection and persistence, keyboard-accessible language switching, source metadata preservation while switching language, slice-editor copy, onset-analysis copy, localized app status states, and absence of the retired bottom status strip metrics.
+The test suite checks dictionary key parity, locale detection and persistence, keyboard-accessible language switching, source metadata preservation while switching language, slice-editor copy, onset-analysis copy, generator copy, localized app status states, and absence of the retired bottom status strip metrics.
 
 ## v0.4.0 Copy Areas
 

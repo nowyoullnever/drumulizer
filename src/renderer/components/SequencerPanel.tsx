@@ -18,7 +18,10 @@ import type {
   SequencerSliceContext,
   SequencerTool,
   SequencerTransportState,
+  PatternGeneratorSettings,
+  PatternMutationState,
 } from '../sequencer/types';
+import type { GenerationSummary } from '../sequencer/generator/generatorTypes';
 import type { KeyboardEvent } from 'react';
 import { sequencerLaneOrder } from '../sequencer/types';
 import { useI18n } from '../i18n/useI18n';
@@ -38,6 +41,11 @@ interface SequencerPanelProps {
   focusedLaneId: SequencerLaneId;
   focusedStepIndex: number;
   masterGain: number;
+  generatorSettings: PatternGeneratorSettings;
+  mutationState: PatternMutationState;
+  generatorReady: boolean;
+  generatorReason: string | null;
+  generationSummary: GenerationSummary | null;
   onToolChange: (tool: SequencerTool) => void;
   onBpmChange: (bpm: number) => void;
   onBarsChange: (bars: number) => void;
@@ -52,6 +60,7 @@ interface SequencerPanelProps {
   onLaneMute: (laneId: SequencerLaneId, muted: boolean) => void;
   onLaneSolo: (laneId: SequencerLaneId, soloed: boolean) => void;
   onLaneGain: (laneId: SequencerLaneId, gainDb: number) => void;
+  onLaneGenerationLock: (laneId: SequencerLaneId, locked: boolean) => void;
   onClearLane: (laneId: SequencerLaneId) => void;
   onClearPattern: () => void;
   onUndo: () => void;
@@ -66,6 +75,16 @@ interface SequencerPanelProps {
   onResetSelectedEvent: () => void;
   onRemoveSelectedEvent: () => void;
   onAuditionSelectedEvent: () => void;
+  onGeneratorSettingsChange: (settings: PatternGeneratorSettings) => void;
+  onGeneratePattern: () => void;
+  onRegeneratePattern: () => void;
+  onMutatePattern: () => void;
+  onRandomizeSeed: () => void;
+  onCopySeed: () => void;
+  onResetGeneratorSettings: () => void;
+  onToggleSelectedEventLock: () => void;
+  onLockAllEvents: () => void;
+  onUnlockAllEvents: () => void;
 }
 
 const roleLetter: Record<string, string> = {
@@ -88,6 +107,11 @@ export function SequencerPanel({
   focusedLaneId,
   focusedStepIndex,
   masterGain,
+  generatorSettings,
+  mutationState,
+  generatorReady,
+  generatorReason,
+  generationSummary,
   onToolChange,
   onBpmChange,
   onBarsChange,
@@ -102,6 +126,7 @@ export function SequencerPanel({
   onLaneMute,
   onLaneSolo,
   onLaneGain,
+  onLaneGenerationLock,
   onClearLane,
   onClearPattern,
   onUndo,
@@ -113,6 +138,16 @@ export function SequencerPanel({
   onResetSelectedEvent,
   onRemoveSelectedEvent,
   onAuditionSelectedEvent,
+  onGeneratorSettingsChange,
+  onGeneratePattern,
+  onRegeneratePattern,
+  onMutatePattern,
+  onRandomizeSeed,
+  onCopySeed,
+  onResetGeneratorSettings,
+  onToggleSelectedEventLock,
+  onLockAllEvents,
+  onUnlockAllEvents,
 }: SequencerPanelProps) {
   const { t } = useI18n();
   const locked = transport.status !== 'stopped';
@@ -213,6 +248,22 @@ export function SequencerPanel({
 
       {locked ? <p className="sequencer-lock">{t('sequencer.editLocked')}</p> : null}
 
+      <PatternGeneratorPanel
+        settings={generatorSettings}
+        mutationState={mutationState}
+        ready={generatorReady}
+        reason={generatorReason}
+        summary={generationSummary}
+        locked={locked}
+        onSettingsChange={onGeneratorSettingsChange}
+        onGenerate={onGeneratePattern}
+        onRegenerate={onRegeneratePattern}
+        onMutate={onMutatePattern}
+        onRandomizeSeed={onRandomizeSeed}
+        onCopySeed={onCopySeed}
+        onResetSettings={onResetGeneratorSettings}
+      />
+
       <div className="active-slice-module">
         <strong>{t('sequencer.activeSlice')}</strong>
         {activeSlice ? (
@@ -281,6 +332,13 @@ export function SequencerPanel({
                   >
                     {t('sequencer.solo')}
                   </PixelButton>
+                  <PixelButton
+                    onClick={() => onLaneGenerationLock(laneId, !lane.generationLocked)}
+                    tone={lane.generationLocked ? 'active' : 'neutral'}
+                    aria-pressed={lane.generationLocked}
+                  >
+                    {t('generator.laneLock')}
+                  </PixelButton>
                   <PixelSlider
                     label={t('sequencer.laneVolume')}
                     min={-24}
@@ -315,7 +373,7 @@ export function SequencerPanel({
                       key={`${laneId}-${stepIndex}`}
                       type="button"
                       role="gridcell"
-                      className={`sequencer-step sequencer-step--${laneId}${event ? ' sequencer-step--occupied' : ''}${selected ? ' sequencer-step--selected' : ''}${playhead ? ' sequencer-step--playhead' : ''}${!audible ? ' sequencer-step--muted' : ''}${mismatch ? ' sequencer-step--mismatch' : ''}${focused ? ' sequencer-step--focused' : ''}`}
+                      className={`sequencer-step sequencer-step--${laneId}${event ? ' sequencer-step--occupied' : ''}${event ? ` sequencer-step--origin-${event.origin}` : ''}${event?.locked ? ' sequencer-step--locked' : ''}${selected ? ' sequencer-step--selected' : ''}${playhead ? ' sequencer-step--playhead' : ''}${!audible ? ' sequencer-step--muted' : ''}${mismatch ? ' sequencer-step--mismatch' : ''}${focused ? ' sequencer-step--focused' : ''}`}
                       aria-selected={selected}
                       aria-label={t('sequencer.stepLabel', {
                         lane: t(`sliceRole.${laneId}`),
@@ -368,7 +426,166 @@ export function SequencerPanel({
         onReset={onResetSelectedEvent}
         onRemove={onRemoveSelectedEvent}
         onAudition={onAuditionSelectedEvent}
+        onToggleLock={onToggleSelectedEventLock}
+        onLockAll={onLockAllEvents}
+        onUnlockAll={onUnlockAllEvents}
       />
+    </div>
+  );
+}
+
+function PatternGeneratorPanel({
+  settings,
+  mutationState,
+  ready,
+  reason,
+  summary,
+  locked,
+  onSettingsChange,
+  onGenerate,
+  onRegenerate,
+  onMutate,
+  onRandomizeSeed,
+  onCopySeed,
+  onResetSettings,
+}: {
+  settings: PatternGeneratorSettings;
+  mutationState: PatternMutationState;
+  ready: boolean;
+  reason: string | null;
+  summary: GenerationSummary | null;
+  locked: boolean;
+  onSettingsChange: (settings: PatternGeneratorSettings) => void;
+  onGenerate: () => void;
+  onRegenerate: () => void;
+  onMutate: () => void;
+  onRandomizeSeed: () => void;
+  onCopySeed: () => void;
+  onResetSettings: () => void;
+}) {
+  const { t } = useI18n();
+  const disabled = locked || !ready;
+  return (
+    <div className="pattern-generator" aria-label={t('generator.title')}>
+      <div className="pattern-generator__header">
+        <strong>{t('generator.title')}</strong>
+        <span>{t('generator.ruleBased')}</span>
+      </div>
+      <label className="generator-seed">
+        <span>{t('generator.seed')}</span>
+        <input
+          value={settings.seed}
+          maxLength={32}
+          onChange={(event) => onSettingsChange({ ...settings, seed: event.currentTarget.value })}
+        />
+      </label>
+      <div className="pattern-generator__seed-actions">
+        <PixelButton onClick={onRandomizeSeed} disabled={locked}>
+          {t('generator.randomizeSeed')}
+        </PixelButton>
+        <PixelButton onClick={onCopySeed}>{t('generator.copySeed')}</PixelButton>
+        <PixelButton onClick={onResetSettings} disabled={locked}>
+          {t('generator.resetSettings')}
+        </PixelButton>
+      </div>
+      <div className="pattern-generator__sliders">
+        <PixelSlider
+          label={t('generator.density')}
+          min={0}
+          max={100}
+          step={1}
+          value={settings.density}
+          disabled={locked}
+          onChange={(event) =>
+            onSettingsChange({ ...settings, density: Number(event.currentTarget.value) })
+          }
+        />
+        <PixelSlider
+          label={t('generator.variation')}
+          min={0}
+          max={100}
+          step={1}
+          value={settings.variation}
+          disabled={locked}
+          onChange={(event) =>
+            onSettingsChange({ ...settings, variation: Number(event.currentTarget.value) })
+          }
+        />
+        <PixelSlider
+          label={t('generator.breakage')}
+          min={0}
+          max={100}
+          step={1}
+          value={settings.breakage}
+          disabled={locked}
+          onChange={(event) =>
+            onSettingsChange({ ...settings, breakage: Number(event.currentTarget.value) })
+          }
+        />
+      </div>
+      <div className="pattern-generator__selects">
+        <label>
+          <span>{t('generator.mode')}</span>
+          <select
+            value={settings.mode}
+            disabled={locked}
+            onChange={(event) =>
+              onSettingsChange({
+                ...settings,
+                mode: event.currentTarget.value as PatternGeneratorSettings['mode'],
+              })
+            }
+          >
+            <option value="preserve-manual">{t('generator.mode.preserveManual')}</option>
+            <option value="replace-unlocked">{t('generator.mode.replaceUnlocked')}</option>
+          </select>
+        </label>
+        <label>
+          <span>{t('generator.scope')}</span>
+          <select
+            value={settings.scope}
+            disabled={locked}
+            onChange={(event) =>
+              onSettingsChange({
+                ...settings,
+                scope: event.currentTarget.value as PatternGeneratorSettings['scope'],
+              })
+            }
+          >
+            <option value="all">{t('generator.scope.all')}</option>
+            {sequencerLaneOrder.map((laneId) => (
+              <option value={laneId} key={laneId}>
+                {t(`sliceRole.${laneId}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {!ready && reason ? (
+        <p className="sequencer-warning">{t(reason as Parameters<typeof t>[0])}</p>
+      ) : null}
+      <div className="pattern-generator__actions">
+        <PixelButton onClick={onGenerate} disabled={disabled}>
+          {t('generator.generate')}
+        </PixelButton>
+        <PixelButton onClick={onRegenerate} disabled={disabled}>
+          {t('generator.regenerate')}
+        </PixelButton>
+        <PixelButton onClick={onMutate} disabled={disabled}>
+          {t('generator.mutate')}
+        </PixelButton>
+      </div>
+      {summary ? (
+        <p className="generator-summary">
+          {t(summary.messageKey as Parameters<typeof t>[0], {
+            added: summary.added,
+            removed: summary.removed,
+            changed: summary.changed,
+            preserved: summary.preserved,
+            mutation: mutationState.mutationIndex,
+          })}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -384,6 +601,9 @@ function EventInspector({
   onReset,
   onRemove,
   onAudition,
+  onToggleLock,
+  onLockAll,
+  onUnlockAll,
 }: {
   event: SequencerEvent | null;
   context: SequencerSliceContext | null;
@@ -395,6 +615,9 @@ function EventInspector({
   onReset: () => void;
   onRemove: () => void;
   onAudition: () => void;
+  onToggleLock: () => void;
+  onLockAll: () => void;
+  onUnlockAll: () => void;
 }) {
   const { t } = useI18n();
   if (!event) {
@@ -433,6 +656,14 @@ function EventInspector({
               ? t('slice.number', { number: context.slice.index + 1 })
               : t('sequencer.invalidSlice')}
           </dd>
+        </div>
+        <div>
+          <dt>{t('generator.origin')}</dt>
+          <dd>{t(`generator.origin.${event.origin}`)}</dd>
+        </div>
+        <div>
+          <dt>{t('generator.eventLock')}</dt>
+          <dd>{event.locked ? t('common.on') : t('common.off')}</dd>
         </div>
         <div>
           <dt>{t('sliceRole.low')}</dt>
@@ -494,6 +725,15 @@ function EventInspector({
         </PixelButton>
         <PixelButton onClick={onRemove} disabled={locked} tone="danger">
           {t('sequencer.removeEvent')}
+        </PixelButton>
+        <PixelButton onClick={onToggleLock} disabled={locked}>
+          {event.locked ? t('generator.unlockEvent') : t('generator.lockEvent')}
+        </PixelButton>
+        <PixelButton onClick={onLockAll} disabled={locked}>
+          {t('generator.lockAll')}
+        </PixelButton>
+        <PixelButton onClick={onUnlockAll} disabled={locked}>
+          {t('generator.unlockAll')}
         </PixelButton>
       </div>
     </div>

@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.7.0] - 2026-07-30
+
+### Added
+
+- Deterministic role-aware Pattern Generator
+- User-editable Pattern Seed
+- Density, Variation, and Breakage controls
+- Preserve Manual and Replace All Unlocked generation modes
+- All-Lane and per-Lane generation scopes
+- Pattern regeneration and bounded mutation
+- Manual, Generated, and Mutated Event origins
+- Event generation locks and Lane generation locks
+- Generated Velocity, Pan, and playback-rate Pitch
+- Generation diagnostics and deterministic evaluation corpus
+- Robust staged Windows packaging workflow
+- Korean and English Pattern Generator interface
+
+### Changed
+
+- Manual Event edits now take manual ownership of generated Events.
+- Windows packaging now uses a unique staging directory to avoid fixed-output EPERM failures.
+- Electron runtime updated to 43.2.0 so `npm audit --audit-level=moderate` reports zero vulnerabilities.
+
 ## [0.6.0] - 2026-07-30
 
 - Added a manual four-lane LOW/MID/HIGH/TEXTURE sequencer with fixed 4/4 sixteenth-note grids, 1-4 bar patterns, and 40-240 BPM control.

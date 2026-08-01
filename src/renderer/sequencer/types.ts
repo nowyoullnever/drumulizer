@@ -8,7 +8,10 @@ export interface SequencerLaneState {
   gainDb: number;
   muted: boolean;
   soloed: boolean;
+  generationLocked: boolean;
 }
+
+export type SequencerEventOrigin = 'manual' | 'generated' | 'mutated';
 
 export interface SequencerEvent {
   id: string;
@@ -18,6 +21,8 @@ export interface SequencerEvent {
   velocity: number;
   pan: number;
   pitchSemitones: number;
+  origin: SequencerEventOrigin;
+  locked: boolean;
 }
 
 export interface SequencerPattern {
@@ -40,6 +45,22 @@ export interface SequencerTransportState {
 
 export type SequencerTool = 'select' | 'paint' | 'erase';
 export type MainWorkspaceMode = 'library' | 'sequencer';
+export type GenerationMode = 'preserve-manual' | 'replace-unlocked';
+export type GenerationScope = 'all' | SequencerLaneId;
+
+export interface PatternGeneratorSettings {
+  seed: string;
+  density: number;
+  variation: number;
+  breakage: number;
+  mode: GenerationMode;
+  scope: GenerationScope;
+}
+
+export interface PatternMutationState {
+  baseSeed: string;
+  mutationIndex: number;
+}
 
 export interface PatternEditResult {
   pattern: SequencerPattern;

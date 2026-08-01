@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { SequencerPanel } from '../components/SequencerPanel';
 import { I18nProvider } from '../i18n/I18nProvider';
 import { localeStorageKey } from '../i18n/localeStorage';
+import {
+  createDefaultGeneratorSettings,
+  createDefaultMutationState,
+} from '../sequencer/generator/generatorTypes';
 import { createDefaultPattern, paintEvent } from '../sequencer/patternModel';
 import type { SequencerSliceContext } from '../sequencer/types';
 import type { SliceRegion } from '../slice/types';
@@ -49,6 +53,11 @@ const renderSequencer = (overrides: Partial<Parameters<typeof SequencerPanel>[0]
     focusedLaneId: 'low',
     focusedStepIndex: 0,
     masterGain: 0.75,
+    generatorSettings: createDefaultGeneratorSettings(),
+    mutationState: createDefaultMutationState(),
+    generatorReady: true,
+    generatorReason: null,
+    generationSummary: null,
     onToolChange: vi.fn(),
     onBpmChange: vi.fn(),
     onBarsChange: vi.fn(),
@@ -63,6 +72,7 @@ const renderSequencer = (overrides: Partial<Parameters<typeof SequencerPanel>[0]
     onLaneMute: vi.fn(),
     onLaneSolo: vi.fn(),
     onLaneGain: vi.fn(),
+    onLaneGenerationLock: vi.fn(),
     onClearLane: vi.fn(),
     onClearPattern: vi.fn(),
     onUndo: vi.fn(),
@@ -74,6 +84,16 @@ const renderSequencer = (overrides: Partial<Parameters<typeof SequencerPanel>[0]
     onResetSelectedEvent: vi.fn(),
     onRemoveSelectedEvent: vi.fn(),
     onAuditionSelectedEvent: vi.fn(),
+    onGeneratorSettingsChange: vi.fn(),
+    onGeneratePattern: vi.fn(),
+    onRegeneratePattern: vi.fn(),
+    onMutatePattern: vi.fn(),
+    onRandomizeSeed: vi.fn(),
+    onCopySeed: vi.fn(),
+    onResetGeneratorSettings: vi.fn(),
+    onToggleSelectedEventLock: vi.fn(),
+    onLockAllEvents: vi.fn(),
+    onUnlockAllEvents: vi.fn(),
     ...overrides,
   };
   return {

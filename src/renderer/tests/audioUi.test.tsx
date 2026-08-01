@@ -93,7 +93,7 @@ describe('audio UI behavior', () => {
 
   it('renders drag rejection and ignores keyboard shortcuts inside inputs', () => {
     renderWithI18n(<App />);
-    const app = screen.getByText('DRUMULIZER / v0.6.0').closest('main') as HTMLElement;
+    const app = screen.getByText('DRUMULIZER / v0.7.0').closest('main') as HTMLElement;
     fireEvent.drop(app, {
       dataTransfer: {
         files: [
